@@ -1,0 +1,21 @@
+{{ range . }}
+<tr {{ if .NextPage }}
+    hx-get="{{ .NextPage }}"
+    hx-trigger="revealed"
+    hx-swap="afterend"
+    {{ end }} >
+    <td>
+        {{/* <span>{{ .Name }}</span> */}}
+        <a href="#" class="link-info link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"
+              hx-get="/details/{{ .Name }}"
+              hx-target="#details"
+              hx-swap="outerHTML" 
+              hx-push-url="/something/{{ .Name }}" >
+           {{ .Name }}
+        </a>
+    </td>
+    <td>
+        <span>{{ .Age }}</span>
+    </td>
+</tr>
+{{ end }}
