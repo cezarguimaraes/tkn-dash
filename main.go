@@ -48,6 +48,26 @@ func parseJSON(name string, out any) error {
 	return nil
 }
 
+type templData struct {
+	// Resource is the root object for this page, taskruns/pipelineruns
+	Resource string
+
+	// PipelineRun is resolved from the :pipelineRun url param
+	PipelineRun *tekton.PipelineRun
+
+	// TaskRun is resolved from the :taskRun url param
+	TaskRun *tekton.TaskRun
+
+	// TaskRuns is the list of taskRuns that should be rendered
+	// in the middle "step view". It is either a list containing
+	// a single taskRun in taskRun view, or the list of taskRuns
+	// pertaining to a pipelineRUn
+	TaskRuns []*tekton.TaskRun
+
+	// Step is the name of the step resolved from the :step url param
+	Step string
+}
+
 func main() {
 	e := echo.New()
 
@@ -91,6 +111,41 @@ func main() {
 		return trs
 	}
 
+	resolveTemplDataFromContext := func(c echo.Context) *templData {
+		td := &templData{}
+		for _, pn := range c.ParamNames() {
+			switch pn {
+			case "resource":
+				// TODO: validate resource
+				td.Resource = c.Param(pn)
+			case "name":
+				if td.Resource == "taskruns" {
+					tr := getTaskRun(c.Param(pn))
+					td.TaskRun = tr
+					if tr != nil {
+						td.TaskRuns = append(td.TaskRuns, tr)
+					}
+					break
+				}
+
+				fallthrough
+			case "pipelineRun":
+				prName := c.Param(pn)
+				td.PipelineRun = getPipelineRun(prName)
+				td.TaskRuns = getPipelineTaskRuns(prName)
+			case "taskRun":
+				tr := getTaskRun(c.Param(pn))
+				td.TaskRun = tr
+				if tr != nil && len(td.TaskRuns) == 0 {
+					td.TaskRuns = append(td.TaskRuns, tr)
+				}
+			case "step":
+				td.Step = c.Param(pn)
+			}
+		}
+
+		return td
+	}
 	fmt.Println(len(prs.Items), len(trs.Items))
 
 	sort.Slice(prs.Items, func(i, j int) bool {
@@ -104,6 +159,17 @@ func main() {
 	})
 
 	t := template.New("all").Funcs(map[string]any{
+		"step_url": func(data *templData, taskRun string, step string) string {
+			frag := fmt.Sprintf("/taskruns/%s/step/%s", taskRun, step)
+			if data.PipelineRun != nil {
+				frag = fmt.Sprintf(
+					"/pipelineruns/%s%s",
+					data.PipelineRun.GetName(),
+					frag,
+				)
+			}
+			return frag
+		},
 		"url_for": func(name string, args ...interface{}) string {
 			return e.Reverse(name, args...)
 		},
@@ -126,68 +192,30 @@ func main() {
 		"pipelineruns": {},
 	}
 	e.GET("/:resource", func(c echo.Context) error {
-		resource := c.Param("resource")
-		if _, ok := supportedResources[resource]; !ok {
-			return c.String(http.StatusNotFound, "Not Found")
-		}
-		return c.Render(http.StatusOK, "index.html", map[string]string{
-			"Resource": resource,
-		})
+		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
 	}).Name = "list"
 	e.GET("/:resource/:name", func(c echo.Context) error {
-		resource := c.Param("resource")
-		if _, ok := supportedResources[resource]; !ok {
-			return c.String(http.StatusNotFound, "Not Found")
-		}
-		return c.Render(http.StatusOK, "index.html", map[string]interface{}{
-			"Name":     c.Param("name"),
-			"Resource": resource,
-		})
+		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
 	}).Name = "list-w-details"
-	e.GET("/taskruns/:name/step/:step", func(c echo.Context) error {
-		return c.Render(http.StatusOK, "index.html", map[string]interface{}{
-			"Name":     c.Param("name"),
-			"Step":     c.Param("step"),
-			"Resource": "taskruns",
-		})
+	e.GET("/:resource/:taskRun/step/:step", func(c echo.Context) error {
+		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
 	})
-	e.GET("/pipelineruns/:name/taskrun/:taskName/step/:step", func(c echo.Context) error {
-		return c.Render(http.StatusOK, "index.html", map[string]interface{}{
-			"Name":     c.Param("name"),
-			"TaskName": c.Param("taskName"),
-			"Step":     c.Param("step"),
-			"Resource": "pipelineruns",
-		})
+	e.GET("/:resource/:pipelineRun/taskruns/:taskRun/step/:step", func(c echo.Context) error {
+		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
 	})
 
 	e.GET("/:resource/:name/details", func(c echo.Context) error {
-		resource := c.Param("resource")
-		if _, ok := supportedResources[resource]; !ok {
-			return c.String(http.StatusNotFound, "Not Found")
+		td := resolveTemplDataFromContext(c)
+		if step := c.QueryParam("step"); step != "" {
+			td.Step = step
 		}
 
-		name := c.Param("name")
-		var trs []*tekton.TaskRun
-		switch resource {
-		case "taskruns":
-			found := getTaskRun(name)
-			if found != nil {
-				trs = append(trs, found)
-			}
-		case "pipelineruns":
-			trs = getPipelineTaskRuns(name)
-		}
-		if len(trs) == 0 {
-			return c.String(http.StatusNotFound, resource+"/"+name+" not found")
+		if task := c.QueryParam("task"); task != "" {
+			td.TaskRun = getTaskRun(task)
+			td.TaskRuns = []*tekton.TaskRun{td.TaskRun}
 		}
 
-		return c.Render(http.StatusOK, "details.html", map[string]interface{}{
-			"Resource":     resource,
-			"ResourceName": name,
-			"TaskRuns":     trs,
-			"Step":         c.QueryParam("step"),
-			"TaskName":     c.QueryParam("task"),
-		})
+		return c.Render(http.StatusOK, "details.html", td)
 	}).Name = "details"
 
 	e.GET("/details/:taskName/step/:stepName", func(c echo.Context) error {
@@ -196,16 +224,6 @@ func main() {
 		if found == nil {
 			return c.String(http.StatusNotFound, taskName+" not found")
 		}
-
-		/*
-			stepName := c.Param("stepName")
-			var foundStep tekton.Step
-			for _, step := range found.Status.TaskSpec.Steps {
-				if step.Name == stepName {
-					foundStep = step
-				}
-			}
-		*/
 
 		return c.Render(http.StatusOK, "step-details", map[string]interface{}{
 			"TaskName": taskName,

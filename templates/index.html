@@ -1,3 +1,37 @@
+
+<!DOCTYPE html>
+<html data-bs-theme="dark">
+    <head>
+        <script src="https://unpkg.com/htmx.org@1.9.4" integrity="sha384-zUfuhFKKZCbHTY6aRR46gxiqszMk5tcHjsVFxnUo8VMus4kHGVdIYVbOYYNlKmHV" crossorigin="anonymous"></script>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
+    </head>
+    <body>
+        <div id="container" class="container-fluid" style="display: flex;">
+            <div class="ms-3 mt-3" id="left" style="flex-shrink: 0">
+                {{ template "navlist" . }}
+            </div>
+
+            <div id="right" style="flex-grow: 1; position: sticky; top: 0; align-self: flex-start; height: 100vh">
+                {{ template "details" . }}
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous"></script>
+    </body>
+</html>
+
+{{ define "navlist" }}
+<table class="table table-dark table-striped">
+    <tr hx-get="{{ url_for "items" .Resource }}"
+        hx-trigger="revealed"
+        hx-swap="afterend">
+        <th>Name</th>
+        <th>Age</th>
+    </tr>
+</table>
+{{ end }}
+
+{{/*
 <!DOCTYPE html>
 <html data-bs-theme="dark">
     <head>
@@ -36,3 +70,4 @@
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous"></script>
     </body>
 </html>
+*/}}

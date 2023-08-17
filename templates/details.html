@@ -1,13 +1,17 @@
 {{ block "details" . }}
 <div id="details" style="display: flex; height: 100%;">
+    {{ . }}
     {{ if . }}
     <div id="tasks" class="ms-3 mt-3" style="flex-shrink: 0; min-width: 300px;">
 
         <div class="accordion" id="accordion">
-            {{ $urlTaskName := .TaskName }}
+            {{- $urlTaskName := "" }}
+            {{- if .TaskRun }}
+            {{- $urlTaskName = .TaskRun.ObjectMeta.Name }}
+            {{- end }}
+
             {{ $urlStepName := .Step }}
             {{ $resource := .Resource }}
-            {{ $resourceName := .ResourceName }}
             {{ range $i, $tr := .TaskRuns }}
             {{ $taskName := $tr.ObjectMeta.Name }}
             <div class="accordion-item">
@@ -39,11 +43,7 @@
                             " data-bs-toggle="list"
                             hx-get="/details/{{ $taskName }}/step/{{ .Name }}"
                             hx-target="#step-details"
-                            {{- if eq $resource "pipelineruns" }}
-                            hx-push-url="/pipelineruns/{{ $resourceName }}/taskrun/{{ $taskName }}/step/{{ .Name }}"
-                            {{- else }}
-                            hx-push-url="/taskruns/{{ $resourceName }}/step/{{ .Name }}"
-                            {{- end }}
+                            hx-push-url="{{ step_url $ $taskName .Name }}"
                             hx-swap="innerHTML" >
                             {{ .Name }}
                         </a>
@@ -55,8 +55,8 @@
         </div>
     </div>
     <div id="step-details" class="ms-3 mt-3" style="flex-grow: 5; height: 100%; display: flex; flex-direction: column;">
-        {{- if and .TaskName .Step }}
-        <div hx-get="{{ url_for "details-w-step" .TaskName .Step }}"
+        {{- if and .TaskRun .Step }}
+        <div hx-get="{{ url_for "details-w-step" $.TaskRun.ObjectMeta.Name .Step }}"
             hx-trigger="load"
             hx-swap="outerHTML" >
         </div>
