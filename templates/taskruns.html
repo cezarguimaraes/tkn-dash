@@ -1,4 +1,5 @@
-{{ range . }}
+{{ $resource := .Resource }}
+{{ range .Items }}
 <tr {{ if .NextPage }}
     hx-get="{{ .NextPage }}"
     hx-trigger="revealed"
@@ -7,11 +8,11 @@
     <td>
         {{/* <span>{{ .Name }}</span> */}}
         <a href="#" class="link-info link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"
-              hx-get="/details/{{ .Name }}"
-              hx-target="#details"
-              hx-swap="outerHTML" 
-              hx-push-url="/something/{{ .Name }}" >
-           {{ .Name }}
+            hx-get="{{ url_for "details" $resource .Name }}"
+            hx-target="#details" 
+            hx-swap="outerHTML" 
+            hx-push-url="{{ url_for "list-w-details" $resource .Name }}" >
+            {{ .Name }}
         </a>
     </td>
     <td>

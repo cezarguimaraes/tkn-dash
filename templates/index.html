@@ -6,9 +6,9 @@
     </head>
     <body>
         <div id="container" class="container-fluid" style="display: flex;">
-            <div class="ms-3 mt-3" id="left" style="">
+            <div class="ms-3 mt-3" id="left" style="flex-shrink: 0">
                 <table class="table table-dark table-striped">
-                    <tr hx-get="/taskruns"
+                    <tr hx-get="{{ url_for "items" .Resource }}"
                         hx-trigger="revealed"
                         hx-swap="afterend">
                         <th>Name</th>
@@ -19,8 +19,13 @@
 
             <div id="right" style="flex-grow: 1; position: sticky; top: 0; align-self: flex-start; height: 100vh">
                 {{ if .Name }}
-                <div hx-get="/details/{{ .Name }}"
+                <div hx-get="{{ url_for "details" .Resource .Name }}"
                      hx-trigger="load"
+                     {{- if .TaskName }}
+                     hx-vals='{"step": "{{ .Step }}", "task": "{{ .TaskName }}"}'
+                     {{- else if .Step }}
+                     hx-vals='{"step": "{{ .Step }}", "task": "{{ .Name }}"}'
+                     {{- end }}
                      hx-swap="outerHTML" ></div>
                 {{ else }}
                 {{ template "details" }}

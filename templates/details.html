@@ -1,22 +1,49 @@
 {{ block "details" . }}
 <div id="details" style="display: flex; height: 100%;">
     {{ if . }}
-    <div id="tasks" class="ms-3 mt-3" style="flex-grow: 1;">
+    <div id="tasks" class="ms-3 mt-3" style="flex-shrink: 0; min-width: 300px;">
 
-        {{ $taskName := .ObjectMeta.Name }}
         <div class="accordion" id="accordion">
+            {{ $urlTaskName := .TaskName }}
+            {{ $urlStepName := .Step }}
+            {{ $resource := .Resource }}
+            {{ $resourceName := .ResourceName }}
+            {{ range $i, $tr := .TaskRuns }}
+            {{ $taskName := $tr.ObjectMeta.Name }}
             <div class="accordion-item">
                 <h2 class="accordion-header">
-                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $taskName }}">
-                        {{ .Spec.TaskRef.Name }}
+                    <button class="accordion-button 
+                            {{- if ne $taskName $urlTaskName -}}
+                            {{" "}}collapsed
+                            {{- end }}"
+                            type="button" 
+                            data-bs-toggle="collapse" 
+                            data-bs-target="#{{ $taskName }}" >
+                        <span class="me-2">{{ $tr.Spec.TaskRef.Name }}</span>
                     </button>
                 </h2>
-                <div class="accordion-collapse collapse show" id="{{ $taskName }}" data-bs-parent="#accordion">
+                <div class="accordion-collapse collapse 
+                        {{- if eq $taskName $urlTaskName -}}
+                        {{" "}}show
+                        {{- end }}" id="{{ $taskName }}" 
+                        data-bs-parent="#accordion" >
                     <ul class="list-group-flush list-group" lass="collapse">
-                        {{ range .Status.Steps }}
-                        <a href="#" class="list-group-item list-group-item-action" data-bs-toggle="list"
+                        {{ range $tr.Status.Steps }}
+                        <a href="#" 
+                            class="list-group-item list-group-item-action 
+                            {{- if eq $taskName $urlTaskName }}
+                            {{- if eq .Name $urlStepName -}}
+                            {{" "}}active
+                            {{- end }}
+                            {{- end -}}
+                            " data-bs-toggle="list"
                             hx-get="/details/{{ $taskName }}/step/{{ .Name }}"
                             hx-target="#step-details"
+                            {{- if eq $resource "pipelineruns" }}
+                            hx-push-url="/pipelineruns/{{ $resourceName }}/taskrun/{{ $taskName }}/step/{{ .Name }}"
+                            {{- else }}
+                            hx-push-url="/taskruns/{{ $resourceName }}/step/{{ .Name }}"
+                            {{- end }}
                             hx-swap="innerHTML" >
                             {{ .Name }}
                         </a>
@@ -24,72 +51,16 @@
                     </ul>
                 </div>
             </div>                
-            {{/* collapsed@button and show@div change between first and other items */}}
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $taskName }}2">
-                        {{ .Spec.TaskRef.Name }}
-                    </button>
-                </h2>
-                <div class="accordion-collapse collapse" id="{{ $taskName }}2" data-bs-parent="#accordion">
-                    <ul class="list-group-flush list-group" lass="collapse">
-                        {{ range .Status.Steps }}
-                        <a href="#" class="list-group-item list-group-item-action" data-bs-toggle="list"
-                            hx-get="/details/{{ $taskName }}/step/{{ .Name }}"
-                            hx-target="#step-details"
-                            hx-swap="innerHTML" >
-                            {{ .Name }}
-                        </a>
-                            {{ end }}
-                    </ul>
-                </div>
-            </div>             
+            {{ end }}
         </div>
-        {{/*
-        <details open="">
-            {{ $taskName := .ObjectMeta.Name }}
-            <summary>{{ $taskName }}</summary>
-            <ul class="list-group">
-                {{ range .Status.Steps }}
-                <li class="list-group-item list-group-item-action">
-                    <span hx-get="/details/{{ $taskName }}/step/{{ .Name }}"
-                        hx-target="#step-details"
-                        hx-swap="innerHTML" >
-                        {{ .Name }}
-                    </span>
-                </li>
-                {{ end }}
-            </ul>
-        </details>
-        */}}
     </div>
-    <div id="params" class="ms-3 mt-3" style="flex-grow: 5; height: 100%; display: flex; flex-direction: column;">
-        <table class="table table-dark table-striped">
-            <thead>
-                <tr>
-                    <th>
-                        Name
-                    </th>
-                    <th>
-                        Value
-                    </th>
-                </tr>
-            </thead>
-            <tbody>
-                {{ range .Spec.Params }}
-                <tr>
-                    <td>
-                        {{ .Name }}
-                    </td>
-                    <td>
-                        {{ .Value.StringVal }}
-                    </td>
-                </tr>
-                {{ end }}
-            </tbody>
-        </table>
-        <div id="step-details" style="flex-grow: 1;">
+    <div id="step-details" class="ms-3 mt-3" style="flex-grow: 5; height: 100%; display: flex; flex-direction: column;">
+        {{- if and .TaskName .Step }}
+        <div hx-get="{{ url_for "details-w-step" .TaskName .Step }}"
+            hx-trigger="load"
+            hx-swap="outerHTML" >
         </div>
+        {{- end }}
     </div>
     {{ else }}
     No details
@@ -98,6 +69,32 @@
 {{ end }}
 
 {{ define "step-details" }}
-<p>{{ .StepName }}</p>
-<iframe id="step-logs" style="width: 100%; height: 100%" src="/log/{{ .TaskName }}/step/{{ .StepName }}" title=""></iframe>
+<table class="table table-dark table-striped">
+    <thead>
+        <tr>
+            <th>
+                Name
+            </th>
+            <th>
+                Value
+            </th>
+        </tr>
+    </thead>
+    <tbody>
+        {{ range .Task.Spec.Params }}
+        <tr>
+            <td>
+                {{ .Name }}
+            </td>
+            <td>
+                {{ .Value.StringVal }}
+            </td>
+        </tr>
+        {{ end }}
+    </tbody>
+</table>
+<div style="flex-grow: 1;">
+    <h3>{{ .StepName }}</h3>
+    <iframe id="step-logs" style="width: 100%; height: 100%" src="/log/{{ .TaskName }}/step/{{ .StepName }}" title=""></iframe>
+</div>
 {{ end }}
