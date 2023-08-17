@@ -1,6 +1,5 @@
 {{ block "details" . }}
 <div id="details" style="display: flex; height: 100%;">
-    {{ . }}
     {{ if . }}
     <div id="tasks" class="ms-3 mt-3" style="flex-shrink: 0; min-width: 300px;">
 
@@ -34,7 +33,14 @@
                     <ul class="list-group-flush list-group" lass="collapse">
                         {{ range $tr.Status.Steps }}
                         <a href="#" 
-                            class="list-group-item list-group-item-action 
+                            class="list-group-item list-group-item-action fw-bold
+                            {{- if .Terminated }}
+                            {{- if eq .Terminated.ExitCode 0 }}
+                            {{" "}}text-success
+                            {{- else }}
+                            {{" "}}text-danger
+                            {{- end }}
+                            {{- end }}
                             {{- if eq $taskName $urlTaskName }}
                             {{- if eq .Name $urlStepName -}}
                             {{" "}}active

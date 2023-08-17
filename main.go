@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"io"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"github.com/labstack/gommon/log"
 	tekton "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"knative.dev/pkg/apis"
 )
 
 var (
@@ -144,9 +144,26 @@ func main() {
 			}
 		}
 
+		for pn := range c.QueryParams() {
+			switch pn {
+			case "step":
+				td.Step = c.QueryParam(pn)
+			case "task":
+				td.TaskRun = getTaskRun(c.QueryParam(pn))
+				td.TaskRuns = []*tekton.TaskRun{td.TaskRun}
+			}
+		}
+
+		// auto select first taskRun / step
+		if td.Step == "" && len(td.TaskRuns) > 0 {
+			if td.TaskRun == nil {
+				td.TaskRun = td.TaskRuns[0]
+			}
+			td.Step = td.TaskRuns[0].Status.TaskSpec.Steps[0].Name
+		}
+
 		return td
 	}
-	fmt.Println(len(prs.Items), len(trs.Items))
 
 	sort.Slice(prs.Items, func(i, j int) bool {
 		return prs.Items[i].GetCreationTimestamp().
@@ -159,16 +176,25 @@ func main() {
 	})
 
 	t := template.New("all").Funcs(map[string]any{
+		"obj_name": func(o metav1.Object) string {
+			return o.GetName()
+		},
 		"step_url": func(data *templData, taskRun string, step string) string {
-			frag := fmt.Sprintf("/taskruns/%s/step/%s", taskRun, step)
 			if data.PipelineRun != nil {
-				frag = fmt.Sprintf(
-					"/pipelineruns/%s%s",
+				return e.Reverse(
+					"list-w-pipe-details",
+					"pipelineruns",
 					data.PipelineRun.GetName(),
-					frag,
+					taskRun,
+					step,
 				)
 			}
-			return frag
+			return e.Reverse(
+				"list-w-task-details",
+				"taskruns",
+				taskRun,
+				step,
+			)
 		},
 		"url_for": func(name string, args ...interface{}) string {
 			return e.Reverse(name, args...)
@@ -199,21 +225,13 @@ func main() {
 	}).Name = "list-w-details"
 	e.GET("/:resource/:taskRun/step/:step", func(c echo.Context) error {
 		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
-	})
+	}).Name = "list-w-task-details"
 	e.GET("/:resource/:pipelineRun/taskruns/:taskRun/step/:step", func(c echo.Context) error {
 		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
-	})
+	}).Name = "list-w-pipe-details"
 
 	e.GET("/:resource/:name/details", func(c echo.Context) error {
 		td := resolveTemplDataFromContext(c)
-		if step := c.QueryParam("step"); step != "" {
-			td.Step = step
-		}
-
-		if task := c.QueryParam("task"); task != "" {
-			td.TaskRun = getTaskRun(task)
-			td.TaskRuns = []*tekton.TaskRun{td.TaskRun}
-		}
 
 		return c.Render(http.StatusOK, "details.html", td)
 	}).Name = "details"
@@ -296,6 +314,7 @@ func main() {
 		type item struct {
 			Name     string
 			Age      string
+			Status   string
 			NextPage string
 		}
 		items := make([]item, 0, (to - from))
@@ -314,6 +333,20 @@ func main() {
 					now.Sub(r.GetCreationTimestamp().Time),
 				) + " ago",
 			})
+			if pr, ok := r.(*tekton.PipelineRun); ok {
+				cond := pr.GetStatusCondition().GetCondition(apis.ConditionSucceeded)
+				if cond != nil {
+					if cond.IsUnknown() {
+						items[i].Status = "Running"
+					}
+					if cond.IsFalse() {
+						items[i].Status = "Failed"
+					}
+					if cond.IsTrue() {
+						items[i].Status = "Succeeded"
+					}
+				}
+			}
 		}
 
 		return c.Render(http.StatusOK, "taskruns.html", map[string]interface{}{
