@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"html/template"
 	"io"
 	"net/http"
@@ -15,9 +16,16 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
 	tekton "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	tektoncs "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
 	"knative.dev/pkg/apis"
 )
+
+const namespace = "tmp"
 
 var (
 	thresholds = [4]time.Duration{time.Second, time.Minute, time.Hour, 24 * time.Hour}
@@ -33,19 +41,6 @@ func ageString(d time.Duration) (res string) {
 		res = strconv.Itoa(int((d+dur-1)/dur)) + suffixes[i] // round up
 	}
 	return
-}
-
-func parseJSON(name string, out any) error {
-	f, err := os.OpenFile(name, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	dec := json.NewDecoder(f)
-	if err := dec.Decode(out); err != nil {
-		return err
-	}
-	return nil
 }
 
 type templData struct {
@@ -69,34 +64,66 @@ type templData struct {
 }
 
 func main() {
+	storage := "file"
+	storage = "sharedInformer"
+
+	var trs, prs Storage
+	switch storage {
+	case "file":
+		var err error
+		prs, err = NewFileStorage[*tekton.PipelineRun]("prs.json")
+		if err != nil {
+			panic(err)
+		}
+
+		trs, err = NewFileStorage[*tekton.TaskRun]("trs.json")
+		if err != nil {
+			panic(err)
+		}
+	case "sharedInformer":
+		var err error
+		config, err := clientcmd.BuildConfigFromFlags("", "/home/nonseq/.kube/config")
+		if err != nil {
+			panic(err.Error())
+		}
+
+		cs, err := tektoncs.NewForConfig(config)
+		if err != nil {
+			panic(err)
+		}
+
+		var stopFn func()
+		prs, stopFn = NewSharedInformerStorage(
+			cs.TektonV1().RESTClient(),
+			namespace,
+			&tekton.PipelineRun{},
+		)
+		defer stopFn()
+
+		trs, stopFn = NewSharedInformerStorage(
+			cs.TektonV1().RESTClient(),
+			namespace,
+			&tekton.TaskRun{},
+		)
+		defer stopFn()
+	}
+
 	e := echo.New()
 
-	var prs tekton.PipelineRunList
-	if err := parseJSON("prs.json", &prs); err != nil {
-		e.Logger.Fatal(err)
-	}
-
-	var trs tekton.TaskRunList
-	if err := parseJSON("trs.json", &trs); err != nil {
-		e.Logger.Fatal(err)
-	}
-
 	getTaskRun := func(name string) *tekton.TaskRun {
-		for i, tr := range trs.Items {
-			if tr.GetName() == name {
-				return &trs.Items[i]
-			}
+		tr, err := trs.Get(name)
+		if err != nil {
+			return nil
 		}
-		return nil
+		return tr.(*tekton.TaskRun)
 	}
 
 	getPipelineRun := func(name string) *tekton.PipelineRun {
-		for i, pr := range prs.Items {
-			if pr.GetName() == name {
-				return &prs.Items[i]
-			}
+		pr, err := prs.Get(name)
+		if err != nil {
+			return nil
 		}
-		return nil
+		return pr.(*tekton.PipelineRun)
 	}
 
 	getPipelineTaskRuns := func(name string) []*tekton.TaskRun {
@@ -164,16 +191,6 @@ func main() {
 
 		return td
 	}
-
-	sort.Slice(prs.Items, func(i, j int) bool {
-		return prs.Items[i].GetCreationTimestamp().
-			Sub(prs.Items[j].GetCreationTimestamp().Time) > 0
-	})
-
-	sort.Slice(trs.Items, func(i, j int) bool {
-		return trs.Items[i].GetCreationTimestamp().
-			Sub(trs.Items[j].GetCreationTimestamp().Time) > 0
-	})
 
 	t := template.New("all").Funcs(map[string]any{
 		"obj_name": func(o metav1.Object) string {
@@ -284,31 +301,24 @@ func main() {
 			return c.String(http.StatusNotFound, "Not Found")
 		}
 
-		var resources []metav1.Object
+		var str Storage
 		switch resource {
 		case "taskruns":
-			for i := range trs.Items {
-				tr := &trs.Items[i]
-				resources = append(resources, tr)
-			}
+			str = trs
 		case "pipelineruns":
-			for i := range prs.Items {
-				pr := &prs.Items[i]
-				resources = append(resources, pr)
-			}
+			str = prs
 		}
 
-		pageSize := 100
-		page := 0
+		opts := &SearchOptions{
+			Limit: 100,
+		}
 		if pageStr := c.QueryParam("page"); pageStr != "" {
-			page, _ = strconv.Atoi(pageStr)
+			opts.ContinueFrom = &pageStr
 		}
 
-		from := page * pageSize
-		to := min(len(resources), (page+1)*pageSize)
-
-		if from >= len(resources) {
-			return c.String(http.StatusOK, "")
+		results, continueFrom, err := str.Search(opts)
+		if err != nil {
+			return err
 		}
 
 		type item struct {
@@ -317,22 +327,25 @@ func main() {
 			Status   string
 			NextPage string
 		}
-		items := make([]item, 0, (to - from))
+		items := make([]item, 0, len(results))
+
 		now := time.Now()
-		for i, r := range resources[from:to] {
+		for i, r := range results {
 			nextPage := ""
-			if i+1 == pageSize {
+			if i+1 == len(results) && continueFrom != nil {
 				nextPage = c.Echo().Reverse("items", resource) +
-					"?page=" +
-					strconv.Itoa(page+1)
+					"?page=" + *continueFrom
 			}
+			obj := r.(metav1.Object)
+
 			items = append(items, item{
-				Name:     r.GetName(),
+				Name:     obj.GetName(),
 				NextPage: nextPage,
 				Age: ageString(
-					now.Sub(r.GetCreationTimestamp().Time),
+					now.Sub(obj.GetCreationTimestamp().Time),
 				) + " ago",
 			})
+
 			if pr, ok := r.(*tekton.PipelineRun); ok {
 				cond := pr.GetStatusCondition().GetCondition(apis.ConditionSucceeded)
 				if cond != nil {
@@ -364,4 +377,155 @@ type TemplateRenderer struct {
 
 func (t *TemplateRenderer) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
 	return t.templates.ExecuteTemplate(w, name, data)
+}
+
+type ContinueToken *string
+
+type SearchOptions struct {
+	ContinueFrom ContinueToken
+	Limit        int
+}
+
+type Storage interface {
+	Get(name string) (interface{}, error)
+
+	Search(*SearchOptions) ([]interface{}, ContinueToken, error)
+}
+
+type fileStorage[T metav1.Object] struct {
+	items   []interface{}
+	nameMap map[string]interface{}
+}
+
+func NewFileStorage[T metav1.Object](path string) (*fileStorage[T], error) {
+	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var out struct {
+		// parse as concrete type T but store as interface{},
+		// otherwise we need to create interface{} slices
+		// on every search
+		Items []T `json:"items"`
+	}
+
+	dec := json.NewDecoder(f)
+	if err := dec.Decode(&out); err != nil {
+		return nil, err
+	}
+
+	sort.Slice(out.Items, func(i, j int) bool {
+		return out.Items[i].GetCreationTimestamp().
+			Sub(out.Items[j].GetCreationTimestamp().Time) > 0
+	})
+
+	nameMap := make(map[string]interface{}, len(out.Items))
+	items := make([]interface{}, 0, len(out.Items))
+	for _, it := range out.Items {
+		nameMap[it.GetName()] = it
+		items = append(items, it)
+	}
+
+	return &fileStorage[T]{items, nameMap}, nil
+}
+
+func (s *fileStorage[T]) Get(name string) (interface{}, error) {
+	found, ok := s.nameMap[name]
+	if !ok {
+		return nil, errors.New("key not found")
+	}
+	return found, nil
+}
+
+func (s *fileStorage[T]) Search(opts *SearchOptions) ([]interface{}, ContinueToken, error) {
+	if opts.Limit == 0 {
+		opts.Limit = 100
+	}
+
+	from := 0
+	if opts.ContinueFrom != nil {
+		var err error
+		from, err = strconv.Atoi(*opts.ContinueFrom)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	if from >= len(s.items) {
+		return nil, nil, nil
+	}
+
+	to := min(len(s.items), from+opts.Limit)
+	continueFrom := strconv.Itoa(to)
+	return s.items[from:to], &continueFrom, nil
+}
+
+type sharedInformerStorage struct {
+	lw      cache.ListerWatcher
+	si      cache.SharedInformer
+	closeCh chan struct{}
+	// TODO: check if empty namespace works for all
+	namespace string
+}
+
+func NewSharedInformerStorage(getter cache.Getter, namespace string, exampleObject runtime.Object) (*sharedInformerStorage, func()) {
+	lw := cache.NewListWatchFromClient(
+		getter,
+		exampleObject.GetObjectKind().GroupVersionKind().Kind,
+		namespace,
+		fields.Everything(),
+	)
+	si := cache.NewSharedInformer(lw, exampleObject, 5*time.Minute)
+	closeCh := make(chan struct{})
+	go si.Run(closeCh)
+
+	stopFunc := func() {
+		close(closeCh)
+	}
+	return &sharedInformerStorage{lw, si, closeCh, namespace}, stopFunc
+}
+
+func (s *sharedInformerStorage) Get(name string) (interface{}, error) {
+	it, exists, err := s.si.GetStore().GetByKey(s.namespace + "/" + name)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errors.New("key does not exist")
+	}
+	return it, nil
+}
+
+func (s *sharedInformerStorage) Search(opts *SearchOptions) ([]interface{}, ContinueToken, error) {
+	if opts.Limit == 0 {
+		opts.Limit = 100
+	}
+
+	// TODO: continue from based on item key/order
+	// not position as items might change inbetween calls
+	from := 0
+	if opts.ContinueFrom != nil {
+		var err error
+		from, err = strconv.Atoi(*opts.ContinueFrom)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	items := s.si.GetStore().List()
+
+	if from >= len(items) {
+		return nil, nil, nil
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].(metav1.Object).GetCreationTimestamp().
+			Sub(items[j].(metav1.Object).GetCreationTimestamp().Time) > 0
+	})
+
+	to := min(len(items), from+opts.Limit)
+	continueFrom := strconv.Itoa(to)
+	return items[from:to], &continueFrom, nil
 }
