@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,12 +23,11 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"knative.dev/pkg/apis"
 )
-
-const namespace = "tmp"
 
 var (
 	thresholds = [4]time.Duration{time.Second, time.Minute, time.Hour, 24 * time.Hour}
@@ -50,6 +50,12 @@ func ageString(d time.Duration) (res string) {
 }
 
 type templData struct {
+	// Namespaces lists all namespaces found.
+	Namespaces []string
+
+	// Namespace specifies which namespace we are working in currently.
+	Namespace string
+
 	// Resource is the root object for this page, taskruns/pipelineruns
 	Resource string
 
@@ -70,8 +76,25 @@ type templData struct {
 }
 
 func main() {
+	var err error
+	config, err := clientcmd.BuildConfigFromFlags("", "/home/nonseq/.kube/config")
+	if err != nil {
+		panic(err.Error())
+	}
+
+	cs := clientset.NewForConfigOrDie(config)
+	res, err := cs.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	var namespaces []string
+	for _, ns := range res.Items {
+		namespaces = append(namespaces, ns.GetName())
+	}
+
 	storage := "file"
-	// storage = "sharedInformer"
+	storage = "sharedInformer"
 
 	var trs, prs Storage
 	switch storage {
@@ -87,11 +110,6 @@ func main() {
 			panic(err)
 		}
 	case "sharedInformer":
-		var err error
-		config, err := clientcmd.BuildConfigFromFlags("", "/home/nonseq/.kube/config")
-		if err != nil {
-			panic(err.Error())
-		}
 
 		cs, err := tektoncs.NewForConfig(config)
 		if err != nil {
@@ -101,7 +119,6 @@ func main() {
 		var stopFn func()
 		prs, stopFn = NewSharedInformerStorage(
 			cs.TektonV1().RESTClient(),
-			namespace,
 			"pipelineruns",
 			&tekton.PipelineRun{},
 		)
@@ -109,7 +126,6 @@ func main() {
 
 		trs, stopFn = NewSharedInformerStorage(
 			cs.TektonV1().RESTClient(),
-			namespace,
 			"taskruns",
 			&tekton.TaskRun{},
 		)
@@ -118,44 +134,48 @@ func main() {
 
 	e := echo.New()
 
-	getTaskRun := func(name string) *tekton.TaskRun {
-		tr, err := trs.Get(name)
+	getTaskRun := func(namespace, name string) *tekton.TaskRun {
+		tr, err := trs.Get(namespace, name)
 		if err != nil {
 			return nil
 		}
 		return tr.(*tekton.TaskRun)
 	}
 
-	getPipelineRun := func(name string) *tekton.PipelineRun {
-		pr, err := prs.Get(name)
+	getPipelineRun := func(namespace, name string) *tekton.PipelineRun {
+		pr, err := prs.Get(namespace, name)
 		if err != nil {
 			return nil
 		}
 		return pr.(*tekton.PipelineRun)
 	}
 
-	getPipelineTaskRuns := func(name string) []*tekton.TaskRun {
-		pr := getPipelineRun(name)
+	getPipelineTaskRuns := func(namespace, name string) []*tekton.TaskRun {
+		pr := getPipelineRun(namespace, name)
 		if pr == nil {
 			return nil
 		}
 		var trs []*tekton.TaskRun
 		for _, cr := range pr.Status.ChildReferences {
-			trs = append(trs, getTaskRun(cr.Name))
+			trs = append(trs, getTaskRun(namespace, cr.Name))
 		}
 		return trs
 	}
 
 	resolveTemplDataFromContext := func(c echo.Context) *templData {
-		td := &templData{}
+		td := &templData{
+			Namespaces: namespaces,
+		}
 		for _, pn := range c.ParamNames() {
 			switch pn {
+			case "namespace":
+				td.Namespace = c.Param(pn)
 			case "resource":
 				// TODO: validate resource
 				td.Resource = c.Param(pn)
 			case "name":
 				if td.Resource == "taskruns" {
-					tr := getTaskRun(c.Param(pn))
+					tr := getTaskRun(td.Namespace, c.Param(pn))
 					td.TaskRun = tr
 					if tr != nil {
 						td.TaskRuns = append(td.TaskRuns, tr)
@@ -166,10 +186,11 @@ func main() {
 				fallthrough
 			case "pipelineRun":
 				prName := c.Param(pn)
-				td.PipelineRun = getPipelineRun(prName)
-				td.TaskRuns = getPipelineTaskRuns(prName)
+				td.PipelineRun = getPipelineRun(td.Namespace, prName)
+				fmt.Println("found pipelinerun", td.PipelineRun)
+				td.TaskRuns = getPipelineTaskRuns(td.Namespace, prName)
 			case "taskRun":
-				tr := getTaskRun(c.Param(pn))
+				tr := getTaskRun(td.Namespace, c.Param(pn))
 				td.TaskRun = tr
 				if tr != nil && len(td.TaskRuns) == 0 {
 					td.TaskRuns = append(td.TaskRuns, tr)
@@ -184,7 +205,7 @@ func main() {
 			case "step":
 				td.Step = c.QueryParam(pn)
 			case "task":
-				td.TaskRun = getTaskRun(c.QueryParam(pn))
+				td.TaskRun = getTaskRun(td.Namespace, c.QueryParam(pn))
 				td.TaskRuns = []*tekton.TaskRun{td.TaskRun}
 			}
 		}
@@ -208,6 +229,7 @@ func main() {
 			if data.PipelineRun != nil {
 				return e.Reverse(
 					"list-w-pipe-details",
+					data.PipelineRun.GetNamespace(),
 					"pipelineruns",
 					data.PipelineRun.GetName(),
 					taskRun,
@@ -216,6 +238,7 @@ func main() {
 			}
 			return e.Reverse(
 				"list-w-task-details",
+				data.TaskRun.GetNamespace(),
 				"taskruns",
 				taskRun,
 				step,
@@ -242,44 +265,47 @@ func main() {
 		"taskruns":     {},
 		"pipelineruns": {},
 	}
-	e.GET("/:resource", func(c echo.Context) error {
+	e.GET("/:namespace/:resource", func(c echo.Context) error {
 		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
 	}).Name = "list"
-	e.GET("/:resource/:name", func(c echo.Context) error {
+	e.GET("/:namespace/:resource/:name", func(c echo.Context) error {
 		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
 	}).Name = "list-w-details"
-	e.GET("/:resource/:taskRun/step/:step", func(c echo.Context) error {
+	e.GET("/:namespace/:resource/:taskRun/step/:step", func(c echo.Context) error {
 		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
 	}).Name = "list-w-task-details"
-	e.GET("/:resource/:pipelineRun/taskruns/:taskRun/step/:step", func(c echo.Context) error {
+	e.GET("/:namespace/:resource/:pipelineRun/taskruns/:taskRun/step/:step", func(c echo.Context) error {
 		return c.Render(http.StatusOK, "index.html", resolveTemplDataFromContext(c))
 	}).Name = "list-w-pipe-details"
 
-	e.GET("/:resource/:name/details", func(c echo.Context) error {
+	e.GET("/:namespace/:resource/:name/details", func(c echo.Context) error {
 		td := resolveTemplDataFromContext(c)
 
 		return c.Render(http.StatusOK, "details.html", td)
 	}).Name = "details"
 
-	e.GET("/details/:taskName/step/:stepName", func(c echo.Context) error {
+	e.GET("/:namespace/details/:taskName/step/:stepName", func(c echo.Context) error {
+		ns := c.Param("namespace")
 		taskName := c.Param("taskName")
-		found := getTaskRun(taskName)
+		found := getTaskRun(ns, taskName)
 		if found == nil {
-			return c.String(http.StatusNotFound, taskName+" not found")
+			return c.String(http.StatusNotFound, ns+"/"+taskName+" not found")
 		}
 
 		return c.Render(http.StatusOK, "step-details", map[string]interface{}{
-			"TaskName": taskName,
-			"StepName": c.Param("stepName"),
-			"Task":     found,
+			"Namespace": ns,
+			"TaskName":  taskName,
+			"StepName":  c.Param("stepName"),
+			"Task":      found,
 		})
 	}).Name = "details-w-step"
 
-	e.GET("/log/:taskName/step/:stepName", func(c echo.Context) error {
+	e.GET("/:namespace/script/:taskName/step/:stepName", func(c echo.Context) error {
+		ns := c.Param("namespace")
 		taskName := c.Param("taskName")
-		found := getTaskRun(taskName)
+		found := getTaskRun(ns, taskName)
 		if found == nil {
-			return c.String(http.StatusNotFound, taskName+" not found")
+			return c.String(http.StatusNotFound, ns+"/"+taskName+" not found")
 		}
 
 		stepName := c.Param("stepName")
@@ -300,10 +326,11 @@ func main() {
 		}
 
 		return c.String(http.StatusOK, foundStep.Script)
-	})
+	}).Name = "script"
 
 	// TODO: pagination by ordered key
 	e.GET("/:resource/items", func(c echo.Context) error {
+		ns := c.QueryParam("namespace")
 		resource := c.Param("resource")
 		if _, ok := supportedResources[resource]; !ok {
 			return c.String(http.StatusNotFound, "Not Found")
@@ -331,6 +358,9 @@ func main() {
 			Limit:         100,
 			LabelSelector: ls,
 		}
+		if ns != "" {
+			opts.Namespace = &ns
+		}
 		if pageStr := c.QueryParam("page"); pageStr != "" {
 			opts.ContinueFrom = &pageStr
 		}
@@ -341,10 +371,11 @@ func main() {
 		}
 
 		type item struct {
-			Name     string
-			Age      string
-			Status   string
-			NextPage string
+			Namespace string
+			Name      string
+			Age       string
+			Status    string
+			NextPage  string
 		}
 		items := make([]item, 0, len(results))
 
@@ -363,8 +394,9 @@ func main() {
 			obj := r.(metav1.Object)
 
 			items = append(items, item{
-				Name:     obj.GetName(),
-				NextPage: nextPage,
+				Namespace: obj.GetNamespace(),
+				Name:      obj.GetName(),
+				NextPage:  nextPage,
 				Age: ageString(
 					now.Sub(obj.GetCreationTimestamp().Time),
 				) + " ago",
@@ -409,10 +441,11 @@ type SearchOptions struct {
 	ContinueFrom  ContinueToken
 	Limit         int
 	LabelSelector labels.Selector
+	Namespace     *string
 }
 
 type Storage interface {
-	Get(name string) (interface{}, error)
+	Get(namespace, name string) (interface{}, error)
 
 	Search(*SearchOptions) ([]interface{}, ContinueToken, error)
 }
@@ -449,15 +482,17 @@ func NewFileStorage[T metav1.Object](path string) (*fileStorage[T], error) {
 	nameMap := make(map[string]interface{}, len(out.Items))
 	items := make([]interface{}, 0, len(out.Items))
 	for _, it := range out.Items {
-		nameMap[it.GetName()] = it
+		key := fmt.Sprintf("%s/%s", it.GetNamespace(), it.GetName())
+		nameMap[key] = it
 		items = append(items, it)
 	}
 
 	return &fileStorage[T]{items, nameMap}, nil
 }
 
-func (s *fileStorage[T]) Get(name string) (interface{}, error) {
-	found, ok := s.nameMap[name]
+func (s *fileStorage[T]) Get(namespace, name string) (interface{}, error) {
+	key := fmt.Sprintf("%s/%s", namespace, name)
+	found, ok := s.nameMap[key]
 	if !ok {
 		return nil, errors.New("key not found")
 	}
@@ -493,6 +528,10 @@ func (s *fileStorage[T]) Search(opts *SearchOptions) ([]interface{}, ContinueTok
 		}
 
 		obj := s.items[at].(metav1.Object)
+		if opts.Namespace != nil && *opts.Namespace != obj.GetNamespace() {
+			continue
+		}
+
 		if !opts.LabelSelector.Matches(labels.Set(obj.GetLabels())) {
 			continue
 		}
@@ -508,20 +547,17 @@ type sharedInformerStorage struct {
 	lw      cache.ListerWatcher
 	si      cache.SharedInformer
 	closeCh chan struct{}
-	// TODO: check if empty namespace works for all
-	namespace string
 }
 
 func NewSharedInformerStorage(
 	getter cache.Getter,
-	namespace string,
 	resource string,
 	exampleObject runtime.Object,
 ) (*sharedInformerStorage, func()) {
 	lw := cache.NewListWatchFromClient(
 		getter,
 		resource,
-		namespace,
+		"",
 		fields.Everything(),
 	)
 	si := cache.NewSharedInformer(lw, exampleObject, 5*time.Minute)
@@ -531,11 +567,11 @@ func NewSharedInformerStorage(
 	stopFunc := func() {
 		close(closeCh)
 	}
-	return &sharedInformerStorage{lw, si, closeCh, namespace}, stopFunc
+	return &sharedInformerStorage{lw, si, closeCh}, stopFunc
 }
 
-func (s *sharedInformerStorage) Get(name string) (interface{}, error) {
-	it, exists, err := s.si.GetStore().GetByKey(s.namespace + "/" + name)
+func (s *sharedInformerStorage) Get(namespace, name string) (interface{}, error) {
+	it, exists, err := s.si.GetStore().GetByKey(namespace + "/" + name)
 	if err != nil {
 		return nil, err
 	}
@@ -583,6 +619,10 @@ func (s *sharedInformerStorage) Search(opts *SearchOptions) ([]interface{}, Cont
 		}
 
 		obj := items[at].(metav1.Object)
+		if opts.Namespace != nil && *opts.Namespace != obj.GetNamespace() {
+			continue
+		}
+
 		if !opts.LabelSelector.Matches(labels.Set(obj.GetLabels())) {
 			continue
 		}
