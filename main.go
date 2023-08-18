@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"io"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	tektoncs "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -31,6 +33,10 @@ var (
 	thresholds = [4]time.Duration{time.Second, time.Minute, time.Hour, 24 * time.Hour}
 	suffixes   = [4]string{"s", "m", "h", "d"}
 )
+
+type StatusConditionAccessor interface {
+	GetStatusCondition() apis.ConditionAccessor
+}
 
 func ageString(d time.Duration) (res string) {
 	res = "1" + suffixes[0]
@@ -65,7 +71,7 @@ type templData struct {
 
 func main() {
 	storage := "file"
-	storage = "sharedInformer"
+	// storage = "sharedInformer"
 
 	var trs, prs Storage
 	switch storage {
@@ -311,8 +317,19 @@ func main() {
 			str = prs
 		}
 
+		var ls labels.Selector
+		if search := c.QueryParam("search"); search != "" {
+			var err error
+			ls, err = labels.Parse(search)
+			if err != nil {
+				return c.String(http.StatusBadRequest, err.Error())
+			}
+			fmt.Println("filtering for ", ls.String())
+		}
+
 		opts := &SearchOptions{
-			Limit: 100,
+			Limit:         100,
+			LabelSelector: ls,
 		}
 		if pageStr := c.QueryParam("page"); pageStr != "" {
 			opts.ContinueFrom = &pageStr
@@ -335,9 +352,14 @@ func main() {
 		for i, r := range results {
 			nextPage := ""
 			if i+1 == len(results) && continueFrom != nil {
+				// include continue token plus any incoming
+				// search params
+				qs := c.QueryParams()
+				qs.Set("page", *continueFrom)
 				nextPage = c.Echo().Reverse("items", resource) +
-					"?page=" + *continueFrom
+					"?" + qs.Encode()
 			}
+
 			obj := r.(metav1.Object)
 
 			items = append(items, item{
@@ -348,8 +370,8 @@ func main() {
 				) + " ago",
 			})
 
-			if pr, ok := r.(*tekton.PipelineRun); ok {
-				cond := pr.GetStatusCondition().GetCondition(apis.ConditionSucceeded)
+			if st, ok := r.(StatusConditionAccessor); ok {
+				cond := st.GetStatusCondition().GetCondition(apis.ConditionSucceeded)
 				if cond != nil {
 					if cond.IsUnknown() {
 						items[i].Status = "Running"
@@ -384,8 +406,9 @@ func (t *TemplateRenderer) Render(w io.Writer, name string, data interface{}, c 
 type ContinueToken *string
 
 type SearchOptions struct {
-	ContinueFrom ContinueToken
-	Limit        int
+	ContinueFrom  ContinueToken
+	Limit         int
+	LabelSelector labels.Selector
 }
 
 type Storage interface {
@@ -445,6 +468,9 @@ func (s *fileStorage[T]) Search(opts *SearchOptions) ([]interface{}, ContinueTok
 	if opts.Limit == 0 {
 		opts.Limit = 100
 	}
+	if opts.LabelSelector == nil {
+		opts.LabelSelector = labels.Everything()
+	}
 
 	from := 0
 	if opts.ContinueFrom != nil {
@@ -459,9 +485,23 @@ func (s *fileStorage[T]) Search(opts *SearchOptions) ([]interface{}, ContinueTok
 		return nil, nil, nil
 	}
 
-	to := min(len(s.items), from+opts.Limit)
-	continueFrom := strconv.Itoa(to)
-	return s.items[from:to], &continueFrom, nil
+	var at int
+	res := make([]interface{}, 0, opts.Limit)
+	for at = from; at < len(s.items); at++ {
+		if len(res) >= opts.Limit {
+			break
+		}
+
+		obj := s.items[at].(metav1.Object)
+		if !opts.LabelSelector.Matches(labels.Set(obj.GetLabels())) {
+			continue
+		}
+
+		res = append(res, obj)
+	}
+
+	continueFrom := strconv.Itoa(at)
+	return res, &continueFrom, nil
 }
 
 type sharedInformerStorage struct {
@@ -472,7 +512,12 @@ type sharedInformerStorage struct {
 	namespace string
 }
 
-func NewSharedInformerStorage(getter cache.Getter, namespace string, resource string, exampleObject runtime.Object) (*sharedInformerStorage, func()) {
+func NewSharedInformerStorage(
+	getter cache.Getter,
+	namespace string,
+	resource string,
+	exampleObject runtime.Object,
+) (*sharedInformerStorage, func()) {
 	lw := cache.NewListWatchFromClient(
 		getter,
 		resource,
@@ -504,6 +549,9 @@ func (s *sharedInformerStorage) Search(opts *SearchOptions) ([]interface{}, Cont
 	if opts.Limit == 0 {
 		opts.Limit = 100
 	}
+	if opts.LabelSelector == nil {
+		opts.LabelSelector = labels.Everything()
+	}
 
 	// TODO: continue from based on item key/order
 	// not position as items might change inbetween calls
@@ -527,7 +575,21 @@ func (s *sharedInformerStorage) Search(opts *SearchOptions) ([]interface{}, Cont
 			Sub(items[j].(metav1.Object).GetCreationTimestamp().Time) > 0
 	})
 
-	to := min(len(items), from+opts.Limit)
-	continueFrom := strconv.Itoa(to)
-	return items[from:to], &continueFrom, nil
+	var at int
+	res := make([]interface{}, 0, opts.Limit)
+	for at = from; at < len(items); at++ {
+		if len(res) >= opts.Limit {
+			break
+		}
+
+		obj := items[at].(metav1.Object)
+		if !opts.LabelSelector.Matches(labels.Set(obj.GetLabels())) {
+			continue
+		}
+
+		res = append(res, obj)
+	}
+
+	continueFrom := strconv.Itoa(at)
+	return res, &continueFrom, nil
 }
