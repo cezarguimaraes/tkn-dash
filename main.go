@@ -96,6 +96,7 @@ func main() {
 		prs, stopFn = NewSharedInformerStorage(
 			cs.TektonV1().RESTClient(),
 			namespace,
+			"pipelineruns",
 			&tekton.PipelineRun{},
 		)
 		defer stopFn()
@@ -103,6 +104,7 @@ func main() {
 		trs, stopFn = NewSharedInformerStorage(
 			cs.TektonV1().RESTClient(),
 			namespace,
+			"taskruns",
 			&tekton.TaskRun{},
 		)
 		defer stopFn()
@@ -470,10 +472,10 @@ type sharedInformerStorage struct {
 	namespace string
 }
 
-func NewSharedInformerStorage(getter cache.Getter, namespace string, exampleObject runtime.Object) (*sharedInformerStorage, func()) {
+func NewSharedInformerStorage(getter cache.Getter, namespace string, resource string, exampleObject runtime.Object) (*sharedInformerStorage, func()) {
 	lw := cache.NewListWatchFromClient(
 		getter,
-		exampleObject.GetObjectKind().GroupVersionKind().Kind,
+		resource,
 		namespace,
 		fields.Everything(),
 	)
