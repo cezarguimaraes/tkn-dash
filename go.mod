@@ -1,6 +1,6 @@
 module github.com/cezarguimaraes/tkn-dash
 
-go 1.21.0
+go 1.20
 
 require (
 	github.com/alecthomas/chroma/v2 v2.8.0
