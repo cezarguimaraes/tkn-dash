@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"html"
 	"html/template"
@@ -23,6 +24,7 @@ import (
 	"github.com/labstack/gommon/log"
 	tekton "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	tektoncs "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
+	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,9 +85,22 @@ type templData struct {
 	Step string
 }
 
+var kubeconfig = flag.String("kubeconfig", "", "path to kubeconfig")
+
 func main() {
 	var err error
-	config, err := clientcmd.BuildConfigFromFlags("", "/home/nonseq/.kube/config")
+	lr := clientcmd.NewDefaultClientConfigLoadingRules()
+	if *kubeconfig != "" {
+		lr.ExplicitPath = *kubeconfig
+	}
+
+	clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		lr,
+		&clientcmd.ConfigOverrides{},
+	)
+
+	// config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	config, err := clientConfig.ClientConfig()
 	if err != nil {
 		panic(err.Error())
 	}
@@ -104,7 +119,7 @@ func main() {
 	}
 
 	storage := "file"
-	storage = "sharedInformer"
+	// storage = "sharedInformer"
 
 	var trs, prs Storage
 	switch storage {
@@ -120,7 +135,6 @@ func main() {
 			panic(err)
 		}
 	case "sharedInformer":
-
 		cs, err := tektoncs.NewForConfig(config)
 		if err != nil {
 			panic(err)
@@ -180,6 +194,13 @@ func main() {
 			switch pn {
 			case "namespace":
 				td.Namespace = c.Param(pn)
+				// Allows one to choose a namespace not found through
+				// the k8s client. Probably only useful for fileStorage
+				// usage in which case this could be loaded from the parsed
+				// files.
+				if !slices.Contains(td.Namespaces, td.Namespace) {
+					td.Namespaces = append(td.Namespaces, td.Namespace)
+				}
 			case "resource":
 				// TODO: validate resource
 				td.Resource = c.Param(pn)
