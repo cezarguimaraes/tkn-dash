@@ -1,7 +1,7 @@
 package tekton
 
 import (
-	"slices"
+	"golang.org/x/exp/slices"
 
 	pipelinev1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 )

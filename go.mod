@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.8.0
 	github.com/labstack/echo/v4 v4.11.1
 	github.com/tektoncd/pipeline v0.47.4
+	golang.org/x/exp v0.0.0-20230307190834-24139beb5833
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.28.0
 	k8s.io/apimachinery v0.28.0
@@ -68,7 +69,6 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/crypto v0.11.0 // indirect
-	golang.org/x/exp v0.0.0-20230307190834-24139beb5833 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.13.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
