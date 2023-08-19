@@ -2,7 +2,7 @@
 {{ range .Items }}
 <tr {{ if .NextPage }}
     hx-get="{{ .NextPage }}"
-    hx-trigger="revealed"
+    hx-trigger="intersect once"
     hx-swap="afterend"
     {{ end }} >
     <td>

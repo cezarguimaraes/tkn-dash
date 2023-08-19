@@ -1,4 +1,4 @@
-module github.com/cezarguimaraes/yatd
+module github.com/cezarguimaraes/tkn-dash
 
 go 1.21.0
 

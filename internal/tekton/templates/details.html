@@ -8,7 +8,7 @@
             {{- $urlTaskName = .TaskRun.ObjectMeta.Name }}
             {{- end }}
 
-            {{ $urlStepName := .Step }}
+            {{ $urlStep := .Step }}
             {{ $resource := .Resource }}
             {{ range $i, $tr := .TaskRuns }}
             {{ $taskName := $tr.ObjectMeta.Name }}
@@ -42,7 +42,7 @@
                             {{- end }}
                             {{- end }}
                             {{- if eq $taskName $urlTaskName }}
-                            {{- if eq .Name $urlStepName -}}
+                            {{- if eq .Name $urlStep -}}
                             {{" "}}active
                             {{- end }}
                             {{- end -}}
@@ -87,7 +87,7 @@
         </tr>
     </thead>
     <tbody>
-        {{ range .Task.Spec.Params }}
+        {{ range .TaskRun.Spec.Params }}
         <tr>
             <td>
                 {{ .Name }}
@@ -100,7 +100,7 @@
     </tbody>
 </table>
 <div style="flex-grow: 1;">
-    <h3>{{ .StepName }}</h3>
+    <h3>{{ .Step }}</h3>
     <ul class="nav nav-tabs" id="myTab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="log-tab" data-bs-toggle="tab" data-bs-target="#log" type="button" role="tab" aria-controls="log" aria-selected="true">Log</button>
@@ -109,7 +109,7 @@
             <button class="nav-link" id="script-tab" data-bs-toggle="tab" data-bs-target="#script" type="button" role="tab" aria-controls="script" aria-selected="false">Script</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="details-tab" data-bs-toggle="tab" data-bs-target="#taskrun-details" type="button" role="tab" aria-controls="details" aria-selected="false">Details</button>
+            <button class="nav-link" id="details-tab" data-bs-toggle="tab" data-bs-target="#manifest" type="button" role="tab" aria-controls="details" aria-selected="false">Details</button>
         </li>
         <!--
         <li class="nav-item" role="presentation">
@@ -120,28 +120,28 @@
     <div class="tab-content">
         <div class="tab-pane active" id="log" role="tabpanel" aria-labelledby="log-tab" tabindex="0">
             <pre class="text-bg-secondary"><code id="log"
-                    hx-get="{{ url_for "log" .Namespace .TaskName .StepName }}"
+                    hx-get="{{ url_for "log" .Namespace (obj_name .TaskRun) .Step }}"
                     hx-trigger="load"
                     >
             </code></pre>
         </div>
         <div 
-            hx-get="{{ url_for "script" .Namespace .TaskName .StepName }}"
+            hx-get="{{ url_for "script" .Namespace (obj_name .TaskRun) .Step }}"
             hx-trigger="load"
             class="tab-pane" id="script" role="tabpanel" aria-labelledby="script-tab" tabindex="0">
            <!-- 
             <iframe 
                 id="step-logs" 
                 style="width: 100%; height: 100%"
-                src="{{ url_for "script" .Namespace .TaskName .StepName }}"
+                src="{{ url_for "script" .Namespace (obj_name .TaskRun) .Step }}"
                 title="">
             </iframe>
            -->
         </div>
         <div 
-            hx-get="{{ url_for "taskrun-details" .Namespace .TaskName }}"
+            hx-get="{{ url_for "manifest" .Namespace (obj_name .TaskRun) }}"
             hx-trigger="load"
-            class="tab-pane" id="taskrun-details" role="tabpanel" aria-labelledby="details-tab" tabindex="0">
+            class="tab-pane" id="manifest" role="tabpanel" aria-labelledby="details-tab" tabindex="0">
         </div>
         <!--
         <div class="tab-pane" id="settings" role="tabpanel" aria-labelledby="settings-tab" tabindex="0">...</div>
