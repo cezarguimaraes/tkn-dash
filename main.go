@@ -99,7 +99,6 @@ func main() {
 		&clientcmd.ConfigOverrides{},
 	)
 
-	// config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	config, err := clientConfig.ClientConfig()
 	if err != nil {
 		panic(err.Error())
@@ -288,9 +287,12 @@ func main() {
 	e.Debug = true
 	e.Logger.SetLevel(log.DEBUG)
 
-	/*
-	   :ns/taskruns/:taskrunname/
-	*/
+	e.GET("/*", func(c echo.Context) error {
+		return c.Redirect(
+			http.StatusFound,
+			c.Echo().Reverse("list", namespaces[0], "taskruns"),
+		)
+	})
 
 	supportedResources := map[string]struct{}{
 		"taskruns":     {},
