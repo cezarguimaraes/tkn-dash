@@ -549,6 +549,9 @@ type sharedInformerStorage struct {
 	closeCh chan struct{}
 }
 
+// TODO: warning whenever there is a List() before
+// the shared informer HasSynced()
+
 func NewSharedInformerStorage(
 	getter cache.Getter,
 	resource string,

@@ -13,17 +13,25 @@
     </head>
     <body>
         <div id="search" class="container-fluid mt-3" style="display: flex;">
-            <input class="form-control" type="search"
-            style="flex-grow: 4;"
-            hx-get="{{ url_for "items" .Resource }}"
-            hx-target="#items"
-            hx-swap="innerHTML"
-            hx-trigger="keyup changed delay:500ms, search"
-            hx-include="#search"
-            placeholder="placeholder"
-            name="search"
-            id="search-text" >
-            </input>
+            <div style="flex-grow: 4;" >
+                <input class="form-control" type="search"
+                hx-get="{{ url_for "items" .Resource }}"
+                hx-target="#items"
+                hx-swap="innerHTML"
+                hx-trigger="keyup changed delay:500ms, search"
+                hx-include="#search"
+                placeholder="{{ "Write a label selector (e.g: \"label=foo\" or \"label1 in (foo, bar), label2 != baz\")" }}"
+                name="search"
+                id="search-text" >
+                </input>
+                <div class="w-100 pt-1 pe-2 text-end"
+                    style="color: var(--bs-info-text-emphasis);" >
+                    For more information, check
+                    <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/labels#Parse">
+                        k8s.io/apimachinery/pkg/labels#Parse
+                    </a> docs.
+                </div>
+            </div>
 
             <div class="ms-3 form-floating">
                 <select name="namespace" id="namespace" class="form-select" style="flex-grow: 1;"
