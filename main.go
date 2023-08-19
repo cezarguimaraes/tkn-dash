@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"io"
 	"net/http"
@@ -14,11 +15,16 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/alecthomas/chroma/quick"
+	"github.com/alecthomas/chroma/v2"
+	chromaHtml "github.com/alecthomas/chroma/v2/formatters/html"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
 	tekton "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	tektoncs "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
+	"gopkg.in/yaml.v3"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -32,6 +38,8 @@ import (
 var (
 	thresholds = [4]time.Duration{time.Second, time.Minute, time.Hour, 24 * time.Hour}
 	suffixes   = [4]string{"s", "m", "h", "d"}
+
+	chromaStyle = "github-dark"
 )
 
 type StatusConditionAccessor interface {
@@ -83,6 +91,8 @@ func main() {
 	}
 
 	cs := clientset.NewForConfigOrDie(config)
+
+	// list namespaces
 	res, err := cs.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		panic(err)
@@ -284,6 +294,8 @@ func main() {
 		return c.Render(http.StatusOK, "details.html", td)
 	}).Name = "details"
 
+	// TODO: migrate these to resolveTemplData..
+
 	e.GET("/:namespace/details/:taskName/step/:stepName", func(c echo.Context) error {
 		ns := c.Param("namespace")
 		taskName := c.Param("taskName")
@@ -299,6 +311,37 @@ func main() {
 			"Task":      found,
 		})
 	}).Name = "details-w-step"
+
+	// TODO: poll from htmx until container finishes
+	e.GET("/:namespace/log/:taskName/step/:stepName", func(c echo.Context) error {
+		ns := c.Param("namespace")
+		taskName := c.Param("taskName")
+		found := getTaskRun(ns, taskName)
+		if found == nil {
+			return c.String(http.StatusNotFound, ns+"/"+taskName+" not found")
+		}
+
+		stepName := c.Param("stepName")
+		req := cs.CoreV1().Pods(ns).GetLogs(
+			found.Status.PodName,
+			&v1.PodLogOptions{
+				Container: "step-" + stepName,
+			},
+		)
+		rc, err := req.Stream(c.Request().Context())
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
+
+		var buf bytes.Buffer
+		_, err = io.Copy(&buf, rc)
+		if err != nil {
+			return err
+		}
+
+		return c.String(http.StatusOK, html.EscapeString(buf.String()))
+	}).Name = "log"
 
 	e.GET("/:namespace/script/:taskName/step/:stepName", func(c echo.Context) error {
 		ns := c.Param("namespace")
@@ -316,17 +359,31 @@ func main() {
 			}
 		}
 
-		var buf bytes.Buffer
-		if err := quick.Highlight(
-			&buf,
-			foundStep.Script,
-			"bash", "html", "monokai",
-		); err == nil {
-			return c.HTML(http.StatusOK, buf.String())
+		c.Response().WriteHeader(http.StatusOK)
+		return formatScriptToHTML(c.Response().Writer, foundStep.Script)
+	}).Name = "script"
+
+	e.GET("/:namespace/details/:taskName", func(c echo.Context) error {
+		ns := c.Param("namespace")
+		taskName := c.Param("taskName")
+		found := getTaskRun(ns, taskName)
+		if found == nil {
+			return c.String(http.StatusNotFound, ns+"/"+taskName+" not found")
 		}
 
-		return c.String(http.StatusOK, foundStep.Script)
-	}).Name = "script"
+		// omit
+		tr := found.DeepCopy()
+		tr.ObjectMeta.ManagedFields = nil
+		delete(tr.ObjectMeta.Annotations, "kubectl.kubernetes.io/last-applied-configuration")
+
+		yml, err := yaml.Marshal(tr)
+		if err != nil {
+			return err
+		}
+
+		c.Response().WriteHeader(http.StatusOK)
+		return formatScriptToHTML(c.Response().Writer, string(yml), "yaml")
+	}).Name = "taskrun-details"
 
 	// TODO: pagination by ordered key
 	e.GET("/:resource/items", func(c echo.Context) error {
@@ -635,4 +692,36 @@ func (s *sharedInformerStorage) Search(opts *SearchOptions) ([]interface{}, Cont
 
 	continueFrom := strconv.Itoa(at)
 	return res, &continueFrom, nil
+}
+
+func formatScriptToHTML(w io.Writer, script string, optLang ...string) error {
+	lexer := lexers.Analyse(script)
+	if lexer == nil {
+		if len(optLang) > 0 {
+			lexer = lexers.Get(optLang[0])
+		}
+		if lexer == nil {
+			lexer = lexers.Fallback
+		}
+	}
+	lexer = chroma.Coalesce(lexer)
+
+	style := styles.Get(chromaStyle)
+	formatter := chromaHtml.New(
+		chromaHtml.BaseLineNumber(0),
+		chromaHtml.WithLineNumbers(true),
+		chromaHtml.WithClasses(false),
+		chromaHtml.LineNumbersInTable(true),
+		chromaHtml.WithLinkableLineNumbers(true, "script"),
+		chromaHtml.TabWidth(4),
+		chromaHtml.WithAllClasses(true),
+		chromaHtml.WrapLongLines(true),
+	)
+
+	iterator, err := lexer.Tokenise(nil, script)
+	if err != nil {
+		return err
+	}
+
+	return formatter.Format(w, style, iterator)
 }
