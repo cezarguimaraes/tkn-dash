@@ -7,10 +7,12 @@ require (
 	github.com/labstack/echo/v4 v4.11.1
 	github.com/labstack/gommon v0.4.0
 	github.com/tektoncd/pipeline v0.47.4
+	golang.org/x/exp v0.0.0-20230307190834-24139beb5833
 	k8s.io/api v0.28.0
 	k8s.io/apimachinery v0.28.0
 	k8s.io/client-go v0.28.0
 	knative.dev/pkg v0.0.0-20230221145627-8efb3485adcf
+	sigs.k8s.io/yaml v1.3.0
 )
 
 require (
@@ -66,7 +68,6 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/crypto v0.11.0 // indirect
-	golang.org/x/exp v0.0.0-20230307190834-24139beb5833 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.13.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
@@ -89,5 +90,4 @@ require (
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
 )

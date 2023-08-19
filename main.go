@@ -25,7 +25,6 @@ import (
 	tekton "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	tektoncs "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 	"golang.org/x/exp/slices"
-	"gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -35,6 +34,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"knative.dev/pkg/apis"
+	"sigs.k8s.io/yaml"
 )
 
 var (
