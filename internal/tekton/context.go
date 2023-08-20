@@ -65,5 +65,17 @@ func (c *Context) GetPipelineTaskRuns(namespace, name string) []*pipelinev1beta1
 	for _, cr := range pr.Status.ChildReferences {
 		trs = append(trs, c.GetTaskRun(namespace, cr.Name))
 	}
+	// support for < v0.45
+	if trMap := pr.Status.TaskRuns; len(trs) == 0 && len(trMap) > 0 {
+		taskOrder := map[string]int{}
+		for ord, task := range pr.Status.PipelineSpec.Tasks {
+			taskOrder[task.Name] = ord
+		}
+		trs = make([]*pipelinev1beta1.TaskRun, len(taskOrder))
+		for name, tr := range trMap {
+			ord := taskOrder[tr.PipelineTaskName]
+			trs[ord] = c.GetTaskRun(namespace, name)
+		}
+	}
 	return trs
 }
