@@ -49,7 +49,6 @@ metadata:
     app.kubernetes.io/component: dashboard
     app.kubernetes.io/instance: default
     app.kubernetes.io/part-of: tkn-dash
-    rbac.dashboard.tekton.dev/subject: tkn-dash
 subjects:
   - kind: ServiceAccount
     name: tkn-dash

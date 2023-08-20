@@ -1,3 +1,71 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tkn-dash
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tkn-dash
+  labels:
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/instance: default
+    app.kubernetes.io/part-of: tkn-dash
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - events
+      - namespaces
+      - pods
+      - pods/log
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - tekton.dev
+    resources:
+      - tasks
+      - taskruns
+      - pipelines
+      - pipelineruns
+      - customruns
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tkn-dash
+  namespace: tkn-dash
+  labels:
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/instance: default
+    app.kubernetes.io/part-of: tkn-dash
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tkn-dash
+  labels:
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/instance: default
+    app.kubernetes.io/part-of: tkn-dash
+    rbac.dashboard.tekton.dev/subject: tkn-dash
+subjects:
+  - kind: ServiceAccount
+    name: tkn-dash
+    namespace: tkn-dash
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tkn-dash
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -36,7 +104,7 @@ spec:
         kubernetes.io/os: linux
       containers:
         - name: tkn-dash
-          image: ko://github.com/cezarguimaraes/tkn-dash
+          image: cezarguimaraes/tkn-dash:vdev
           ports:
             - containerPort: 8000
               #livenessProbe:
@@ -53,9 +121,11 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop:
-              - "ALL"
+                - "ALL"
             runAsUser: 65532
             runAsGroup: 65532
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
+
+---

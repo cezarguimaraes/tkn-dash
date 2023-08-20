@@ -1,0 +1,35 @@
+name: Publish Release YAML
+
+on:
+  release:
+    types:
+      - 'created'
+
+jobs:
+  publish-release-yaml:
+    name: Publish Release YAML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+      - uses: actions/checkout@v3
+      -
+        name: Set up Ko
+        uses: ko-build/setup-ko@v0.6
+        env: 
+          KO_DOCKER_REPO: cezarguimaraes/tkn-dash
+      -
+        name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      -
+        name: Publish Docker and resolve kubernetes manifests
+        run: |
+          tag=$(echo ${{ github.ref }} | cut -c11-)  # get tag name without tags/refs/ prefix.
+          ko resolve -f configs --tag-only --tags ${tags} --bare > release.yaml
+          cat release.yaml
+          gh release upload ${tag} release.yaml
+

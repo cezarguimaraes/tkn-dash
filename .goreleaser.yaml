@@ -13,20 +13,6 @@ builds:
       - linux
       - windows
       - darwin
-    hooks:
-      post:
-        - ko resolve -f configs --tag-only --tags {{.Tag}} --bare > resolved.yaml
-kos:
-  - repository: cezarguimaraes/tkn-dash
-    platforms:
-      - all
-    tags:
-      - latest
-      - '{{.Tag}}'
-    creation_time: '{{.CommitTimestamp}}'
-    ko_data_creation_time: '{{.CommitTimestamp}}'
-    bare: true
-    preserve_import_paths: false
 
 archives:
   - format: tar.gz
