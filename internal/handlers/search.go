@@ -27,6 +27,15 @@ func Search(t *template.Template) echo.HandlerFunc {
 		ns := c.QueryParam("namespace")
 		resource := c.Param("resource")
 
+		if c.Request().Header.Get("HX-Trigger-Name") == "namespace" {
+			// ensure we update the user's URL and history
+			// when they select a namespace
+			c.Response().Header().Set(
+				"HX-Push-Url",
+				c.Echo().Reverse("list", ns, resource),
+			)
+		}
+
 		str := tc.GetStoreFor(resource)
 
 		var ls labels.Selector
