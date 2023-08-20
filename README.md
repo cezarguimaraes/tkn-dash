@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/cezarguimaraes/tkn-dash/blob/main/LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/cezarguimaraes/tkn-dash)](https://goreportcard.com/report/github.com/cezarguimaraes/tkn-dash)
+![CI](https://github.com/cezarguimaraes/tkn-dash/actions/workflows/go.yml/badge.svg)
 
 `tkn-dash` is a barebones, lightweight and **fast** alternative to [Tekton Dashboard](https://github.com/tektoncd/dashboard).
 
