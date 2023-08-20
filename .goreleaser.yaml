@@ -13,6 +13,9 @@ builds:
       - linux
       - windows
       - darwin
+    hooks:
+      post:
+        - ko resolve -f configs --tag-only --tags {{.Tag}} --bare > resolved.yaml
 kos:
   - repository: cezarguimaraes/tkn-dash
     platforms:
