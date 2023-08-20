@@ -18,7 +18,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	pipelinev1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	tektoncs "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -236,14 +236,14 @@ func initializeStores(
 	tcs *tektoncs.Clientset,
 ) (trs cache.Store, prs cache.Store, stopFn func()) {
 	trInformer, trStopFn := cache.NewSharedInformerCache(
-		tcs.TektonV1().RESTClient(),
+		tcs.TektonV1beta1().RESTClient(),
 		"taskruns",
-		&pipelinev1.TaskRun{},
+		&pipelinev1beta1.TaskRun{},
 	)
 	prInformer, prStopFn := cache.NewSharedInformerCache(
-		tcs.TektonV1().RESTClient(),
+		tcs.TektonV1beta1().RESTClient(),
 		"pipelineruns",
-		&pipelinev1.PipelineRun{},
+		&pipelinev1beta1.PipelineRun{},
 	)
 
 	stopFn = func() {

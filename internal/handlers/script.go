@@ -6,7 +6,7 @@ import (
 	"github.com/cezarguimaraes/tkn-dash/internal/syntax"
 	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
 	"github.com/labstack/echo/v4"
-	pipelinev1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 )
 
 func StepScript(chromaStyle string) echo.HandlerFunc {
@@ -17,7 +17,7 @@ func StepScript(chromaStyle string) echo.HandlerFunc {
 			return err
 		}
 
-		var foundStep pipelinev1.Step
+		var foundStep pipelinev1beta1.Step
 		for _, step := range td.TaskRun.Status.TaskSpec.Steps {
 			if step.Name == td.Step {
 				foundStep = step

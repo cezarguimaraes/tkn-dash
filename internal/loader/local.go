@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/cezarguimaraes/tkn-dash/pkg/cache"
-	pipelinev1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -16,9 +16,9 @@ import (
 func loadFile(path, kind string) (cache.Store, error) {
 	switch kind {
 	case "taskrun":
-		return cache.FromFile[*pipelinev1.TaskRun](path)
+		return cache.FromFile[*pipelinev1beta1.TaskRun](path)
 	case "pipelinerun":
-		return cache.FromFile[*pipelinev1.PipelineRun](path)
+		return cache.FromFile[*pipelinev1beta1.PipelineRun](path)
 	default:
 		return nil, fmt.Errorf("unknown kind: %q", kind)
 	}
