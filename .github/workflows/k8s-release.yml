@@ -5,6 +5,9 @@ on:
     types:
       - 'created'
 
+permissions:
+  contents: write
+
 jobs:
   publish-release-yaml:
     name: Publish Release YAML
@@ -27,9 +30,11 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       -
         name: Publish Docker and resolve kubernetes manifests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag=$(echo ${{ github.ref }} | cut -c11-)  # get tag name without tags/refs/ prefix.
-          ko resolve -f configs --tag-only --tags ${tags} --bare > release.yaml
+          ko resolve -f configs --tag-only --tags ${tag} --bare > release.yaml
           cat release.yaml
           gh release upload ${tag} release.yaml
 
