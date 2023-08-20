@@ -28,11 +28,11 @@ func LoadLocalLists(paths ...string) (map[string]cache.Store, error) {
 	storeMap := map[string][]cache.Store{}
 
 	for _, p := range paths {
-
 		f, err := os.OpenFile(p, os.O_RDONLY, os.ModePerm)
 		if err != nil {
 			return nil, err
 		}
+		defer f.Close()
 
 		tmp := map[string]interface{}{}
 
@@ -62,7 +62,14 @@ func LoadLocalLists(paths ...string) (map[string]cache.Store, error) {
 
 	unionMap := map[string]cache.Store{}
 	for k, stores := range storeMap {
-		unionMap[k] = cache.Union(stores...)
+		switch len(stores) {
+		case 0:
+			return nil, fmt.Errorf("unexpected empty list of stores for kind %q", k)
+		case 1:
+			unionMap[k] = stores[0]
+		default:
+			unionMap[k] = cache.Union(stores...)
+		}
 	}
 
 	return unionMap, nil

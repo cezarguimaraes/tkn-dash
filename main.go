@@ -9,12 +9,13 @@ import (
 	"github.com/cezarguimaraes/tkn-dash/internal/handlers"
 	"github.com/cezarguimaraes/tkn-dash/internal/loader"
 	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
+	"github.com/cezarguimaraes/tkn-dash/internal/tools"
 	"github.com/cezarguimaraes/tkn-dash/pkg/cache"
+	"github.com/go-logr/logr"
 
 	"github.com/labstack/echo/v4"
 	pipelinev1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	tektoncs "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -31,13 +32,8 @@ func main() {
 
 	log := klog.NewKlogr()
 
-	kubecfg, err := loadKubeConfig()
-	if err != nil {
-		log.Error(err, "error loading kubeconfig")
-		klog.FlushAndExit(10*time.Second, 1)
-	}
-
 	var trs, prs cache.Store
+	var kubeclientset *clientset.Clientset
 
 	if args := flag.Args(); len(args) > 0 {
 		log.Info("loading tekton resources from files", "files", args)
@@ -49,6 +45,18 @@ func main() {
 		trs = stores["taskrun"]
 		prs = stores["pipelinerun"]
 	} else {
+		kubecfg, err := loadKubeConfig()
+		if err != nil {
+			log.Error(err, "error loading kubeconfig")
+			klog.FlushAndExit(10*time.Second, 1)
+		}
+
+		kubeclientset, err = clientset.NewForConfig(kubecfg)
+		if err != nil {
+			log.Error(err, "error initializing kubernetes clientset")
+			klog.FlushAndExit(10*time.Second, 1)
+		}
+
 		log.Info("loading tekton resources from cluster")
 		tcs, err := tektoncs.NewForConfig(kubecfg)
 		if err != nil {
@@ -57,22 +65,16 @@ func main() {
 		}
 
 		var stopFn func()
-		prs, stopFn = cache.NewSharedInformerCache(
-			tcs.TektonV1().RESTClient(),
-			"pipelineruns",
-			&pipelinev1.PipelineRun{},
-		)
-		defer stopFn()
-
-		trs, stopFn = cache.NewSharedInformerCache(
-			tcs.TektonV1().RESTClient(),
-			"taskruns",
-			&pipelinev1.TaskRun{},
-		)
+		trs, prs, stopFn = initializeStores(log, tcs)
 		defer stopFn()
 	}
-	kubeclientset := clientset.NewForConfigOrDie(kubecfg)
-	namespaces := listNamespaces(kubeclientset)
+
+	nsLister := tools.NamespaceListerFromStore(trs, prs)
+	namespaces, err := nsLister.List(context.Background())
+	if err != nil {
+		log.Error(err, "error listing namespaces")
+		klog.FlushAndExit(10*time.Second, 1)
+	}
 
 	tknMiddleware := tekton.NewMiddleware(prs, trs, namespaces)
 
@@ -166,18 +168,38 @@ func loadKubeConfig() (*rest.Config, error) {
 	return clientConfig.ClientConfig()
 }
 
-func listNamespaces(cs *clientset.Clientset) []string {
-	res, err := cs.CoreV1().
-		Namespaces().
-		List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		panic(err)
+func initializeStores(
+	log logr.Logger,
+	tcs *tektoncs.Clientset,
+) (trs cache.Store, prs cache.Store, stopFn func()) {
+	trInformer, trStopFn := cache.NewSharedInformerCache(
+		tcs.TektonV1().RESTClient(),
+		"taskruns",
+		&pipelinev1.TaskRun{},
+	)
+	prInformer, prStopFn := cache.NewSharedInformerCache(
+		tcs.TektonV1().RESTClient(),
+		"pipelineruns",
+		&pipelinev1.PipelineRun{},
+	)
+
+	stopFn = func() {
+		prStopFn()
+		trStopFn()
 	}
 
-	var ns []string
-	for _, it := range res.Items {
-		ns = append(ns, it.GetName())
+	log.Info("waiting until shared informers have synced")
+	for {
+		time.Sleep(1 * time.Second)
+		if !prInformer.HasSynced() {
+			continue
+		}
+		if !trInformer.HasSynced() {
+			continue
+		}
+		break
 	}
+	log.Info("shared informers have synced")
 
-	return ns
+	return trInformer, prInformer, stopFn
 }

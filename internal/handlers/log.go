@@ -15,6 +15,13 @@ import (
 // TODO: poll from htmx until container finishes
 func StepLog(cs *clientset.Clientset) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		if cs == nil {
+			return c.String(
+				http.StatusOK,
+				"logs unavailable: tkn-dash initialized from files",
+			)
+		}
+
 		tc := c.(*tekton.Context)
 		td := &tekton.TemplateData{}
 		if err := tc.BindTemplateData(td); err != nil {
