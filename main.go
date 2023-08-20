@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -12,8 +14,10 @@ import (
 	"github.com/cezarguimaraes/tkn-dash/internal/tools"
 	"github.com/cezarguimaraes/tkn-dash/pkg/cache"
 	"github.com/go-logr/logr"
+	"github.com/pkg/browser"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	pipelinev1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	tektoncs "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 	clientset "k8s.io/client-go/kubernetes"
@@ -25,9 +29,13 @@ import (
 var (
 	kubeconfig  = flag.String("kubeconfig", "", "(optional) path to kubeconfig")
 	chromaStyle = flag.String("syntax-style", "github-dark", "a valid style name from https://xyproto.github.io/splash/docs/")
+	addr        = flag.String("addr", ":", "[address]:port to listen on")
+	openBrowser = flag.Bool("browser", false, "whether to try and open a browser to the dashboard")
 )
 
 func main() {
+	klog.InitFlags(nil)
+
 	flag.Parse()
 
 	log := klog.NewKlogr()
@@ -79,6 +87,36 @@ func main() {
 	tknMiddleware := tekton.NewMiddleware(prs, trs, namespaces)
 
 	e := echo.New()
+
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogURI:           true,
+		LogError:         true,
+		LogRemoteIP:      true,
+		LogHost:          true,
+		LogMethod:        true,
+		LogLatency:       true,
+		LogResponseSize:  true,
+		LogContentLength: true,
+		LogStatus:        true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			keysAndValues := []interface{}{
+				"method", v.Method,
+				"URI", v.URI,
+				"status", v.Status,
+				"remote_ip", v.RemoteIP,
+				"host", v.Host,
+				"latency", v.Latency,
+				"request_content_length", v.ContentLength,
+				"response_size", v.ResponseSize,
+			}
+			if v.Error != nil {
+				log.Error(v.Error, "error handling request", keysAndValues...)
+			} else {
+				log.V(2).Info("request responded", keysAndValues...)
+			}
+			return nil
+		},
+	}))
 
 	e.Use(tknMiddleware)
 
@@ -151,7 +189,32 @@ func main() {
 
 	e.GET("/:resource/items", handlers.Search(ts)).Name = "items"
 
-	e.Logger.Fatal(e.Start(":8000"))
+	lc := net.ListenConfig{
+		KeepAlive: 3 * time.Minute,
+	}
+	l, err := lc.Listen(context.Background(), "tcp4", *addr)
+	if err != nil {
+		log.Error(err, "failed to listen on specified address", *addr)
+		klog.FlushAndExit(10*time.Second, 1)
+	}
+
+	tcpAddr := l.Addr().(*net.TCPAddr)
+	localURL := fmt.Sprintf("http://127.0.0.1:%d", tcpAddr.Port)
+	log.Info("server is listening", "address", l.Addr(), "URL", localURL)
+
+	if *openBrowser {
+		err := browser.OpenURL(localURL)
+		if err != nil {
+			log.Error(err, "failed to open browser", "URL", localURL)
+		}
+	}
+
+	e.HideBanner = true
+	e.HidePort = true
+	e.Listener = l
+	if err := e.Start(*addr); err != nil {
+		log.Error(err, "error starting server")
+	}
 }
 
 func loadKubeConfig() (*rest.Config, error) {
