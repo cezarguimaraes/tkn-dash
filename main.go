@@ -16,7 +16,6 @@ import (
 	"github.com/labstack/echo/v4"
 	pipelinev1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	tektoncs "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -167,22 +166,6 @@ func loadKubeConfig() (*rest.Config, error) {
 	)
 
 	return clientConfig.ClientConfig()
-}
-
-func listNamespaces(cs *clientset.Clientset) []string {
-	res, err := cs.CoreV1().
-		Namespaces().
-		List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		panic(err)
-	}
-
-	var ns []string
-	for _, it := range res.Items {
-		ns = append(ns, it.GetName())
-	}
-
-	return ns
 }
 
 func initializeStores(
