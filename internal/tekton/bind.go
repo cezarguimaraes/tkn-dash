@@ -3,7 +3,7 @@ package tekton
 import (
 	"golang.org/x/exp/slices"
 
-	pipelinev1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 )
 
 type TemplateData struct {
@@ -17,16 +17,16 @@ type TemplateData struct {
 	Resource string
 
 	// PipelineRun is resolved from the :pipelineRun url param
-	PipelineRun *pipelinev1.PipelineRun
+	PipelineRun *pipelinev1beta1.PipelineRun
 
 	// TaskRun is resolved from the :taskRun url param
-	TaskRun *pipelinev1.TaskRun
+	TaskRun *pipelinev1beta1.TaskRun
 
 	// TaskRuns is the list of taskRuns that should be rendered
 	// in the middle "step view". It is either a list containing
 	// a single taskRun in taskRun view, or the list of taskRuns
 	// pertaining to a pipelineRUn
-	TaskRuns []*pipelinev1.TaskRun
+	TaskRuns []*pipelinev1beta1.TaskRun
 
 	// Step is the name of the step resolved from the :step url param
 	Step string
@@ -85,7 +85,7 @@ func (c *Context) BindTemplateData(td *TemplateData) error {
 			td.Step = c.QueryParam(pn)
 		case "task":
 			td.TaskRun = c.GetTaskRun(td.Namespace, c.QueryParam(pn))
-			td.TaskRuns = []*pipelinev1.TaskRun{td.TaskRun}
+			td.TaskRuns = []*pipelinev1beta1.TaskRun{td.TaskRun}
 		}
 	}
 
