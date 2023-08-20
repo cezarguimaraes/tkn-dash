@@ -66,22 +66,20 @@
                 <div class="ms-3 form-floating" style="flex-grow: 1;">
                     <select name="namespace" id="namespace" class="form-select" style="flex-grow: 1;"
                         autocomplete="off"
-                        >
-                        {{ range .Namespaces }}
-                        <option
                         hx-get="{{ url_for "items" $.Resource }}" 
                         hx-target="#items"
                         hx-swap="innerHTML" 
-                        hx-include="#search"
-                        hx-push-url="{{ url_for "list" . $.Resource }}"
-
+                        hx-include="#search" >
+                        {{ range .Namespaces }}
+                        <option
                         {{ if eq . $.Namespace }}
                         selected
-                        {{ end }}
-                        >{{ . }}</option>
+                        {{ end }} >
+                        {{ . }}
+                        </option>
                         {{ end }}
                     </select>
-                        <label for="namespace">Namespace</label>
+                    <label for="namespace">Namespace</label>
                 </div>
             </div>
             <div id="container" class="container-fluid" style="display: flex; overflow: auto;" hx-history-elt>
