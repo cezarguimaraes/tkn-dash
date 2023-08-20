@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tkn-dash
+  namespace: tkn-dash
+  labels:
+    app.kubernetes.io/name: dashboard
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/instance: default
+    app.kubernetes.io/version: devel
+    app.kubernetes.io/part-of: tkn-dash
+    dashboard.tekton.dev/release: "devel"
+    app: tkn-dash
+    version: "devel"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dashboard
+      app.kubernetes.io/component: dashboard
+      app.kubernetes.io/instance: default
+      app.kubernetes.io/part-of: tkn-dash
+  template:
+    metadata:
+      name: tkn-dash
+      labels:
+        app.kubernetes.io/name: dashboard
+        app.kubernetes.io/component: dashboard
+        app.kubernetes.io/instance: default
+        app.kubernetes.io/version: devel
+        app.kubernetes.io/part-of: tkn-dash
+        app: tkn-dash
+    spec:
+      serviceAccountName: tkn-dash
+      volumes: []
+      nodeSelector:
+        kubernetes.io/os: linux
+      containers:
+        - name: tkn-dash
+          image: ko://github.com/cezarguimaraes/tkn-dash
+          ports:
+            - containerPort: 8000
+              #livenessProbe:
+              #httpGet:
+              #path: /health
+              #port: 9097
+              #readinessProbe:
+              #httpGet:
+              #path: /readiness
+              #port: 9097
+          args:
+            - -addr=:8000
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - "ALL"
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
