@@ -2,6 +2,7 @@ package tekton
 
 import (
 	"github.com/cezarguimaraes/tkn-dash/pkg/cache"
+	"github.com/go-logr/logr"
 	"github.com/labstack/echo/v4"
 	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 )
@@ -9,21 +10,51 @@ import (
 type Context struct {
 	echo.Context
 
+	Log logr.Logger
+
 	pr, tr cache.Store
 
+	opts *mwOpts
+}
+
+type mwOpts struct {
 	namespaces []string
+	log        logr.Logger
+}
+
+type Option func(*mwOpts)
+
+func WithNamespaces(ns []string) Option {
+	return func(o *mwOpts) {
+		o.namespaces = ns
+	}
+}
+
+func WithLogger(log logr.Logger) Option {
+	return func(o *mwOpts) {
+		o.log = log
+	}
 }
 
 // TODO: remove namespaces param
 
-func NewMiddleware(pr, tr cache.Store, namespaces []string) echo.MiddlewareFunc {
+func NewMiddleware(pr, tr cache.Store, opts ...Option) echo.MiddlewareFunc {
+	options := &mwOpts{
+		log: logr.Logger{},
+	}
+	for _, o := range opts {
+		o(options)
+	}
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			cc := &Context{
-				Context:    c,
-				pr:         pr,
-				tr:         tr,
-				namespaces: namespaces,
+				Context: c,
+				pr:      pr,
+				tr:      tr,
+				opts:    options,
+				Log: options.log.WithValues(
+					"url", c.Request().URL.RequestURI(),
+				),
 			}
 			return next(cc)
 		}
@@ -71,11 +102,29 @@ func (c *Context) GetPipelineTaskRuns(namespace, name string) []*pipelinev1beta1
 		for ord, task := range pr.Status.PipelineSpec.Tasks {
 			taskOrder[task.Name] = ord
 		}
+
+		c.Log.V(6).Info("resolved taskruns order", "order", taskOrder)
+
 		trs = make([]*pipelinev1beta1.TaskRun, len(taskOrder))
 		for name, tr := range trMap {
 			ord := taskOrder[tr.PipelineTaskName]
 			trs[ord] = c.GetTaskRun(namespace, name)
 		}
+		// skipped tasks won't have a taskrun
+		trs = removeNils(trs)
 	}
 	return trs
+}
+
+func removeNils[T any](vs []*T) []*T {
+	x := 0
+	for i, v := range vs {
+		if v != nil {
+			if x != i {
+				vs[x] = v
+			}
+			x += 1
+		}
+	}
+	return vs[:x]
 }

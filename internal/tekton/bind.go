@@ -35,7 +35,7 @@ type TemplateData struct {
 func (c *Context) BindTemplateData(td *TemplateData) error {
 	// TODO: use echo Bind() for param extraction
 	// TODO: maybe run this on the middleware when all routes use template data
-	td.Namespaces = c.namespaces
+	td.Namespaces = c.opts.namespaces
 
 	for _, pn := range c.ParamNames() {
 		switch pn {
@@ -95,6 +95,33 @@ func (c *Context) BindTemplateData(td *TemplateData) error {
 			td.TaskRun = td.TaskRuns[0]
 		}
 		td.Step = td.TaskRuns[0].Status.TaskSpec.Steps[0].Name
+	}
+
+	if log := c.Log.V(4); log.Enabled() {
+		tr := ""
+		if td.TaskRun != nil {
+			tr = td.TaskRun.GetName()
+		}
+		pr := ""
+		if td.PipelineRun != nil {
+			pr = td.PipelineRun.GetName()
+		}
+
+		trs := []string{}
+		for _, t := range td.TaskRuns {
+			if t == nil {
+				trs = append(trs, "<nil>")
+				continue
+			}
+			trs = append(trs, t.GetName())
+		}
+
+		c.Log.V(4).Info("bound values",
+			"resource", td.Resource,
+			"taskRun", tr,
+			"pipelineRun", pr,
+			"taskRuns", trs,
+		)
 	}
 
 	return nil

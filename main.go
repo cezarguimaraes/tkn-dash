@@ -88,7 +88,11 @@ func main() {
 		klog.FlushAndExit(10*time.Second, 1)
 	}
 
-	tknMiddleware := tekton.NewMiddleware(prs, trs, namespaces)
+	tknMiddleware := tekton.NewMiddleware(
+		prs, trs,
+		tekton.WithNamespaces(namespaces),
+		tekton.WithLogger(log),
+	)
 
 	e := echo.New()
 
