@@ -16,7 +16,7 @@ func sliceSearch(items []interface{}, opts *SearchOptions) ([]interface{}, Conti
 	}
 
 	// TODO: continue from based on item key/order
-	// not position as items might change inbetween calls
+	// not position as items might change between calls
 	from := 0
 	if opts.ContinueFrom != nil {
 		var err error
