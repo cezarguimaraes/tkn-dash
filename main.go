@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
 	"fmt"
 	"net"
@@ -25,6 +26,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 )
+
+//go:embed static/*
+var static embed.FS
 
 var (
 	kubeconfig  = flag.String("kubeconfig", "", "(optional) path to kubeconfig")
@@ -118,7 +122,22 @@ func main() {
 		},
 	}))
 
+	// workaround to add middleware to .StaticFS
+	staticGrp := e.Group("/_static",
+		func(next echo.HandlerFunc) echo.HandlerFunc {
+			return func(c echo.Context) error {
+				c.Response().Header().Set(
+					echo.HeaderCacheControl,
+					"public, max-age=31536000",
+				)
+				return next(c)
+			}
+		},
+	)
+	staticGrp.StaticFS("/", echo.MustSubFS(static, "static"))
+
 	e.Use(tknMiddleware)
+	e.Use(middleware.Gzip())
 
 	ts, err := tekton.LoadTemplates(e)
 	if err != nil {
