@@ -6,6 +6,8 @@ require (
 	github.com/alecthomas/chroma/v2 v2.8.0
 	github.com/go-logr/logr v1.2.4
 	github.com/labstack/echo/v4 v4.11.1
+	github.com/maragudk/gomponents v0.20.1
+	github.com/maragudk/gomponents-htmx v0.3.0
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/tektoncd/pipeline v0.47.4
 	golang.org/x/exp v0.0.0-20230307190834-24139beb5833

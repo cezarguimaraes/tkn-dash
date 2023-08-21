@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"html/template"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,18 +8,29 @@ import (
 	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
 	"github.com/cezarguimaraes/tkn-dash/pkg/cache"
 	"github.com/labstack/echo/v4"
+	"github.com/maragudk/gomponents"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"knative.dev/pkg/apis"
 )
 
-var supportedResources = map[string]struct{}{
-	"taskruns":     {},
-	"pipelineruns": {},
+type SearchItem struct {
+	Namespace string
+	Name      string
+	Age       string
+	Status    string
+	NextPage  string
 }
 
-// TODO: pagination by ordered key
-func Search(t *template.Template) echo.HandlerFunc {
+type SearchResults struct {
+	Resource string
+	Items    []SearchItem
+	URLFor   func(string, ...interface{}) string
+}
+
+type renderer func(SearchResults) []gomponents.Node
+
+func Search(r renderer) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		tc := c.(*tekton.Context)
 
@@ -63,14 +73,7 @@ func Search(t *template.Template) echo.HandlerFunc {
 			return err
 		}
 
-		type item struct {
-			Namespace string
-			Name      string
-			Age       string
-			Status    string
-			NextPage  string
-		}
-		items := make([]item, 0, len(results))
+		items := make([]SearchItem, 0, len(results))
 
 		now := time.Now()
 		for i, r := range results {
@@ -104,7 +107,7 @@ func Search(t *template.Template) echo.HandlerFunc {
 			}
 
 			obj := r.(metav1.Object)
-			items = append(items, item{
+			items = append(items, SearchItem{
 				Namespace: obj.GetNamespace(),
 				Name:      obj.GetName(),
 				NextPage:  nextPage,
@@ -116,10 +119,18 @@ func Search(t *template.Template) echo.HandlerFunc {
 
 		}
 
-		return t.ExecuteTemplate(c.Response(), "taskruns.html", map[string]interface{}{
-			"Resource": resource,
-			"Items":    items,
-		})
+		sr := SearchResults{
+			Resource: resource,
+			Items:    items,
+			URLFor:   c.Echo().Reverse,
+		}
+
+		for _, it := range r(sr) {
+			if err := it.Render(c.Response()); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 }
 
