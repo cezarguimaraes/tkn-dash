@@ -45,7 +45,7 @@ func LoadLocalLists(paths ...string) (map[string]cache.Store, error) {
 		out.SetUnstructuredContent(tmp)
 
 		var kind string
-		out.EachListItem(func(obj runtime.Object) error {
+		_ = out.EachListItem(func(obj runtime.Object) error {
 			kind = obj.GetObjectKind().GroupVersionKind().Kind
 			// return an error to stop iteration
 			return errors.New("")

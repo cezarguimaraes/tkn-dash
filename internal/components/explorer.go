@@ -1,0 +1,213 @@
+package components
+
+import (
+	"strings"
+
+	"github.com/cezarguimaraes/tkn-dash/internal/handlers"
+	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
+	g "github.com/maragudk/gomponents"
+	htmx "github.com/maragudk/gomponents-htmx"
+	c "github.com/maragudk/gomponents/components"
+	. "github.com/maragudk/gomponents/html"
+)
+
+const navBarContent = "navbar-content"
+
+func NavBar(td *tekton.TemplateData) g.Node {
+	return Nav(
+		Class("navbar navbar-expand-lg bg-body-tertiary"),
+		Div(
+			Class("container-fluid"),
+			A(Class("navbar-brand"), Href("#"), g.Text("tkn-dash")),
+			Button(
+				Class("navbar-toggler"),
+				Type("button"),
+				DataAttr("bs-toggle", "collapse"),
+				DataAttr("bs-target", "#"+navBarContent),
+				Aria("controls", navBarContent),
+				Aria("expanded", "false"),
+				Aria("label", "Toggle navigation"),
+				Span(Class("navbar-toggler-icon")),
+			),
+			Div(Class("collapse navbar-collapse"), ID(navBarContent),
+				Ul(
+					Class("navbar-nav me-auto mb-2 mb-lg-0"),
+					g.Group(g.Map(
+						[]string{"PipelineRuns", "TaskRuns"},
+						func(res string) g.Node {
+							active := strings.ToLower(res) == td.Resource
+							return Li(
+								Class("nav-item"),
+								A(
+									c.Classes{
+										"nav-link": true,
+										"active":   active,
+									},
+									Href(td.URLFor(
+										"list",
+										td.Namespace,
+										strings.ToLower(res),
+									)),
+									g.Text(res),
+								),
+							)
+						},
+					)),
+				),
+			),
+		),
+	)
+}
+
+func Namespaces(td *tekton.TemplateData) g.Node {
+	return Div(
+		Class("ms-3 form-floating"),
+		StyleAttr("flex-grow: 1;"),
+		Select(
+			Name("namespace"), ID("namespace"), Class("form-select"),
+			StyleAttr("flex-grow: 1;"),
+			AutoComplete("off"),
+			htmx.Get(td.URLFor("items", td.Resource)),
+			htmx.Target("#items"),
+			htmx.Swap("innerHTML"),
+			htmx.Include("#search"),
+			g.Group(g.Map(td.Namespaces, func(ns string) g.Node {
+				return Option(g.If(ns == td.Namespace, Selected()), g.Text(ns))
+			})),
+		),
+		Label(For("namespace"), g.Text("Namespace")),
+	)
+}
+
+func Search(td *tekton.TemplateData) g.Node {
+	return Div(
+		ID("search"), Class("container-fluid mt-3"),
+		StyleAttr("display: flex;"),
+		Div(
+			StyleAttr("flex-grow: 5;"),
+			Input(
+				Name("search"), ID("search-text"),
+				Class("form-control form-control-lg"),
+				Type("search"),
+				Placeholder("Write a label selector (e.g: \"label=foo\" or \"label1 in (foo, bar), label2 != baz\")"),
+				htmx.Get(td.URLFor("items", td.Resource)),
+				htmx.Target("#items"),
+				htmx.Swap("innerHTML"),
+				htmx.Trigger("keyup changed delay:500ms, search"),
+				htmx.Include("#search"),
+			),
+			Div(
+				Class("w-100 pt-1 pe-2 text-end"),
+				StyleAttr("color: var(--bs-info-text-emphasis)"),
+				g.Text("For more information, check "),
+				A(
+					Href("https://pkg.go.dev/k8s.io/apimachinery/pkg/labels#Parse"),
+					g.Text("https://pkg.go.dev/k8s.io/apimachinery/pkg/labels#Parse"),
+				),
+				g.Text(" docs."),
+			),
+		),
+		Namespaces(td),
+	)
+}
+
+func ExplorerList(td *tekton.TemplateData) g.Node {
+	return Table(
+		Class("table table-dark table-striped"),
+		THead(Tr(
+			htmx.Get(td.URLFor("items", td.Resource)),
+			htmx.Target("#items"),
+			htmx.Include("#search"),
+			htmx.Trigger("revealed"),
+			htmx.Swap("innerHTML"),
+			Th(g.Text("Name")),
+			Th(g.Text("Age")),
+		)),
+		TBody(ID("items")),
+	)
+}
+
+func iconFor(status string) g.Node {
+	switch status {
+	case "Failed":
+		return g.Raw(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="text-danger bi bi-x-circle-fill" viewBox="0 0 16 16">
+                <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
+            </svg>
+        `)
+	case "Succeeded":
+		return g.Raw(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="text-success bi bi-check-circle-fill" viewBox="0 0 16 16">
+                <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+            </svg>
+        `)
+	case "Running":
+		return g.Raw(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="text-warning bi bi-circle-fill" viewBox="0 0 16 16">
+                <circle cx="8" cy="8" r="8"/>
+            </svg>
+        `)
+	}
+	return g.Text("")
+}
+
+func ExplorerListItems(sr handlers.SearchResults) []g.Node {
+	return g.Map(sr.Items, func(it handlers.SearchItem) g.Node {
+		return Tr(
+			g.If(
+				it.NextPage != "",
+				g.Group([]g.Node{
+					htmx.Get(it.NextPage),
+					htmx.Trigger("intersect once"),
+					htmx.Swap("afterend"),
+				}),
+			),
+			Td(
+				A(
+					Href("#"),
+					Class("link-info link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"),
+					htmx.Get(sr.URLFor(
+						"details",
+						it.Namespace,
+						sr.Resource,
+						it.Name,
+					)),
+					htmx.Target("#details"),
+					htmx.Swap("outerHTML"),
+					htmx.PushURL(sr.URLFor(
+						"list-w-details",
+						it.Namespace,
+						sr.Resource,
+						it.Name,
+					)),
+					iconFor(it.Status),
+					g.Text(it.Name),
+				),
+			),
+			Td(Span(g.Text(it.Age))),
+		)
+	})
+}
+
+func Explorer(td *tekton.TemplateData) g.Node {
+	return Div(
+		Class("vh-100"), StyleAttr("display: flex; flex-direction: column;"),
+		NavBar(td),
+		Search(td),
+		Div(
+			ID("container"), Class("container-fluid"),
+			StyleAttr("display: flex; overflow: auto;"),
+			htmx.HistoryElt(""),
+			Div(
+				ID("left"), Class("mt-3"),
+				StyleAttr("flex-shrink: 0; overflow: auto;"),
+				ExplorerList(td),
+			),
+			Div(
+				ID("right"), Class("pe-3"),
+				StyleAttr("flex-grow: 1;"),
+				TaskRuns(td),
+			),
+		),
+	)
+}

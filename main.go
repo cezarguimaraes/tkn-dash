@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cezarguimaraes/tkn-dash/internal/components"
 	"github.com/cezarguimaraes/tkn-dash/internal/handlers"
 	"github.com/cezarguimaraes/tkn-dash/internal/loader"
 	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
@@ -143,12 +144,6 @@ func main() {
 	e.Use(tknMiddleware)
 	e.Use(middleware.Gzip())
 
-	ts, err := tekton.LoadTemplates(e)
-	if err != nil {
-		log.Error(err, "error loading embedded templates")
-		klog.FlushAndExit(10*time.Second, 1)
-	}
-
 	e.GET("/*", func(c echo.Context) error {
 		return c.Redirect(
 			http.StatusFound,
@@ -156,46 +151,47 @@ func main() {
 		)
 	})
 
-	templateRoutes := []struct {
-		name, route, template string
+	componentRoutes := []struct {
+		name, route string
+		component   handlers.TektonComponent
 	}{
 		{
-			route:    "/:namespace/:resource",
-			name:     "list",
-			template: "index.html",
+			route:     "/:namespace/:resource",
+			name:      "list",
+			component: components.Shell(components.Explorer),
 		},
 		{
-			route:    "/:namespace/:resource/:name",
-			name:     "list-w-details",
-			template: "index.html",
+			route:     "/:namespace/:resource/:name",
+			name:      "list-w-details",
+			component: components.Shell(components.Explorer),
 		},
 		{
-			route:    "/:namespace/:resource/:taskRun/step/:step",
-			name:     "list-w-task-details",
-			template: "index.html",
+			route:     "/:namespace/:resource/:taskRun/step/:step",
+			name:      "list-w-task-details",
+			component: components.Shell(components.Explorer),
 		},
 		{
-			route:    "/:namespace/:resource/:pipelineRun/taskruns/:taskRun/step/:step",
-			name:     "list-w-pipe-details",
-			template: "index.html",
+			route:     "/:namespace/:resource/:pipelineRun/taskruns/:taskRun/step/:step",
+			name:      "list-w-pipe-details",
+			component: components.Shell(components.Explorer),
 		},
 		{
-			route:    "/:namespace/:resource/:name/details",
-			name:     "details",
-			template: "details.html",
+			route:     "/:namespace/:resource/:name/details",
+			name:      "list-w-pipe-details",
+			component: components.TaskRuns,
 		},
 		{
-			route:    "/:namespace/details/:taskRun/step/:step",
-			name:     "details-w-step",
-			template: "step-details",
+			route:     "/:namespace/details/:taskRun/step/:step",
+			name:      "details-w-step",
+			component: components.TaskRunDetails,
 		},
 	}
 
-	for _, rt := range templateRoutes {
+	for _, ct := range componentRoutes {
 		e.GET(
-			rt.route,
-			tekton.TemplateHandler(ts, rt.template),
-		).Name = rt.name
+			ct.route,
+			handlers.Component(ct.component),
+		).Name = ct.name
 	}
 
 	e.GET("/:namespace/log/:taskRun/step/:step",
@@ -210,7 +206,11 @@ func main() {
 		handlers.Manifest(*chromaStyle),
 	).Name = "manifest"
 
-	e.GET("/:resource/items", handlers.Search(ts)).Name = "items"
+	e.GET("/:resource/items",
+		handlers.Search(
+			components.ExplorerListItems,
+		),
+	).Name = "items"
 
 	lc := net.ListenConfig{
 		KeepAlive: 3 * time.Minute,

@@ -30,9 +30,13 @@ type TemplateData struct {
 
 	// Step is the name of the step resolved from the :step url param
 	Step string
+
+	URLFor func(name string, args ...interface{}) string
 }
 
 func (c *Context) BindTemplateData(td *TemplateData) error {
+	td.URLFor = c.Context.Echo().Reverse
+
 	// TODO: use echo Bind() for param extraction
 	// TODO: maybe run this on the middleware when all routes use template data
 	td.Namespaces = c.opts.namespaces
@@ -118,6 +122,7 @@ func (c *Context) BindTemplateData(td *TemplateData) error {
 
 		c.Log.V(4).Info("bound values",
 			"resource", td.Resource,
+			"namespaces", td.Namespaces,
 			"taskRun", tr,
 			"pipelineRun", pr,
 			"taskRuns", trs,
