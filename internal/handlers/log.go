@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/cezarguimaraes/tkn-dash/internal/components"
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
 	"github.com/labstack/echo/v4"
 	v1 "k8s.io/api/core/v1"
@@ -15,17 +17,20 @@ import (
 // TODO: poll from htmx until container finishes
 func StepLog(cs *clientset.Clientset) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		tc := c.(*tekton.Context)
+		td := &model.TemplateData{}
+		if err := tc.BindTemplateData(td); err != nil {
+			return err
+		}
+
+		components.StepDetailsTabs(td, "log", true).
+			Render(c.Response())
+
 		if cs == nil {
 			return c.String(
 				http.StatusOK,
 				"logs unavailable: tkn-dash initialized from files",
 			)
-		}
-
-		tc := c.(*tekton.Context)
-		td := &tekton.TemplateData{}
-		if err := tc.BindTemplateData(td); err != nil {
-			return err
 		}
 
 		req := cs.CoreV1().Pods(td.Namespace).GetLogs(
@@ -46,6 +51,8 @@ func StepLog(cs *clientset.Clientset) echo.HandlerFunc {
 			return err
 		}
 
-		return c.String(http.StatusOK, html.EscapeString(buf.String()))
+		log := bytes.NewBufferString(html.EscapeString(buf.String()))
+		_, err = io.Copy(c.Response(), log)
+		return err
 	}
 }

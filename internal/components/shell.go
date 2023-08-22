@@ -1,15 +1,14 @@
 package components
 
 import (
-	"github.com/cezarguimaraes/tkn-dash/internal/handlers"
-	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	g "github.com/maragudk/gomponents"
 	c "github.com/maragudk/gomponents/components"
 	. "github.com/maragudk/gomponents/html"
 )
 
-func Shell(content ...handlers.TektonComponent) handlers.TektonComponent {
-	return func(td *tekton.TemplateData) g.Node {
+func Shell(content ...model.TektonComponent) model.TektonComponent {
+	return func(td *model.TemplateData) g.Node {
 		return c.HTML5(c.HTML5Props{
 			Title: "tkn-dash",
 			Head: []g.Node{
@@ -48,7 +47,7 @@ func Shell(content ...handlers.TektonComponent) handlers.TektonComponent {
 				*/
 			},
 			Body: append(
-				g.Map(content, func(tc handlers.TektonComponent) g.Node {
+				g.Map(content, func(tc model.TektonComponent) g.Node {
 					return tc(td)
 				}),
 				DataAttr("theme", "night"),

@@ -12,6 +12,7 @@ import (
 	"github.com/cezarguimaraes/tkn-dash/internal/components"
 	"github.com/cezarguimaraes/tkn-dash/internal/handlers"
 	"github.com/cezarguimaraes/tkn-dash/internal/loader"
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
 	"github.com/cezarguimaraes/tkn-dash/internal/tools"
 	"github.com/cezarguimaraes/tkn-dash/pkg/cache"
@@ -153,7 +154,7 @@ func main() {
 
 	componentRoutes := []struct {
 		name, route string
-		component   handlers.TektonComponent
+		component   model.TektonComponent
 	}{
 		{
 			route:     "/:namespace/:resource",
@@ -194,15 +195,15 @@ func main() {
 		).Name = ct.name
 	}
 
-	e.GET("/:namespace/log/:taskRun/step/:step",
+	e.GET("/log/:namespace/:taskRun/step/:step",
 		handlers.StepLog(kubeclientset),
 	).Name = "log"
 
-	e.GET("/:namespace/script/:taskRun/step/:step",
+	e.GET("/script/:namespace/:taskRun/step/:step",
 		handlers.StepScript(*chromaStyle),
 	).Name = "script"
 
-	e.GET("/:namespace/manifest/:taskRun",
+	e.GET("/manifest/:namespace/:taskRun/step/:step",
 		handlers.Manifest(*chromaStyle),
 	).Name = "manifest"
 

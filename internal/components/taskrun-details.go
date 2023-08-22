@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	g "github.com/maragudk/gomponents"
 	htmx "github.com/maragudk/gomponents-htmx"
 	c "github.com/maragudk/gomponents/components"
@@ -13,13 +13,12 @@ import (
 )
 
 type stepDetail struct {
-	idx     int
 	Name    string
 	Content g.Node
 	Active  bool
 }
 
-func detailsHTMX(td *tekton.TemplateData, route string) g.Node {
+func detailsHTMX(td *model.TemplateData, route string) g.Node {
 	return g.Group(
 		[]g.Node{
 			htmx.Get(td.URLFor(route, td.Namespace, td.TaskRun.GetName(), td.Step)),
@@ -28,7 +27,7 @@ func detailsHTMX(td *tekton.TemplateData, route string) g.Node {
 	)
 }
 
-func TaskRunDetails(td *tekton.TemplateData) g.Node {
+func StepDetailsTabs(td *model.TemplateData, active string, outOfBand bool) g.Node {
 	stepDetails := []*stepDetail{
 		{
 			Name: "Log",
@@ -54,11 +53,40 @@ func TaskRunDetails(td *tekton.TemplateData) g.Node {
 		},
 	}
 
-	for idx, sd := range stepDetails {
-		sd.idx = idx
+	noneActive := true
+	for _, sd := range stepDetails {
+		if strings.ToLower(sd.Name) == active {
+			sd.Active = true
+			noneActive = false
+		}
 	}
-	stepDetails[0].Active = true
+	if noneActive {
+		stepDetails[0].Active = true
+	}
 
+	return Div(
+		Class("tabs tabs-boxed"),
+		ID("step-details-tabs"),
+		g.If(
+			outOfBand,
+			htmx.SwapOOB("true"),
+		),
+		g.Group(g.Map(stepDetails, func(sd *stepDetail) g.Node {
+			route := strings.ToLower(sd.Name)
+			return A(
+				c.Classes{
+					"tab":        true,
+					"tab-active": sd.Active,
+				},
+				htmx.Get(td.URLFor(route, td.Namespace, td.TaskRun.GetName(), td.Step)),
+				htmx.Target("#step-details-content"),
+				g.Text(sd.Name),
+			)
+		})),
+	)
+}
+
+func TaskRunDetails(td *model.TemplateData) g.Node {
 	return Div(
 		Table(
 			Class("table table-zebra"),
@@ -77,22 +105,7 @@ func TaskRunDetails(td *tekton.TemplateData) g.Node {
 		Div(
 			StyleAttr("flex-grow: 1;"),
 			H3(g.Text(td.Step)),
-			Div(
-				Class("tabs tabs-boxed"),
-				ID("step-details-tabs"),
-				g.Group(g.Map(stepDetails, func(sd *stepDetail) g.Node {
-					route := strings.ToLower(sd.Name)
-					return A(
-						c.Classes{
-							"tab":        true,
-							"tab-active": sd.Active,
-						},
-						htmx.Get(td.URLFor(route, td.Namespace, td.TaskRun.GetName(), td.Step)),
-						htmx.Target("#step-details-content"),
-						g.Text(sd.Name),
-					)
-				})),
-			),
+			StepDetailsTabs(td, "", false),
 			Div(
 				ID("step-details-content"),
 			),

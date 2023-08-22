@@ -3,7 +3,7 @@ package components
 import (
 	"io"
 
-	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	g "github.com/maragudk/gomponents"
 	htmx "github.com/maragudk/gomponents-htmx"
 	c "github.com/maragudk/gomponents/components"
@@ -13,7 +13,7 @@ import (
 
 type renders[T any] func(T) g.Node
 
-func taskRun(td *tekton.TemplateData) renders[*pipelinev1beta1.TaskRun] {
+func taskRun(td *model.TemplateData) renders[*pipelinev1beta1.TaskRun] {
 	return func(tr *pipelinev1beta1.TaskRun) g.Node {
 		return Li(
 			Details(
@@ -62,7 +62,7 @@ func taskRun(td *tekton.TemplateData) renders[*pipelinev1beta1.TaskRun] {
 }
 
 func step(
-	td *tekton.TemplateData,
+	td *model.TemplateData,
 	tr *pipelinev1beta1.TaskRun,
 ) renders[pipelinev1beta1.StepState] {
 	return func(ss pipelinev1beta1.StepState) g.Node {
@@ -124,7 +124,7 @@ func (ww *wrap) Render(w io.Writer) error {
 	return ww.f().Render(w)
 }
 
-func TaskRuns(td *tekton.TemplateData) g.Node {
+func TaskRuns(td *model.TemplateData) g.Node {
 	return Div(
 		ID("details"), StyleAttr("display: flex;"),
 
@@ -177,7 +177,7 @@ func TaskRuns(td *tekton.TemplateData) g.Node {
 	)
 }
 
-func stepURL(data *tekton.TemplateData, taskRun string, step string) string {
+func stepURL(data *model.TemplateData, taskRun string, step string) string {
 	if data.PipelineRun != nil {
 		return data.URLFor(
 			"list-w-pipe-details",

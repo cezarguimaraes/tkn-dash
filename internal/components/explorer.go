@@ -3,8 +3,7 @@ package components
 import (
 	"strings"
 
-	"github.com/cezarguimaraes/tkn-dash/internal/handlers"
-	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	g "github.com/maragudk/gomponents"
 	htmx "github.com/maragudk/gomponents-htmx"
 	c "github.com/maragudk/gomponents/components"
@@ -13,7 +12,7 @@ import (
 
 const navBarContent = "navbar-content"
 
-func NavBar(td *tekton.TemplateData) g.Node {
+func NavBar(td *model.TemplateData) g.Node {
 	return Div(
 		Class("navbar bg-base-100"),
 		Div(
@@ -94,7 +93,7 @@ func NavBar(td *tekton.TemplateData) g.Node {
 	)
 }
 
-func Namespaces(td *tekton.TemplateData) g.Node {
+func Namespaces(td *model.TemplateData) g.Node {
 	return Div(
 		Class("mx-2 form-floating"),
 		StyleAttr("flex-grow: 1;"),
@@ -117,7 +116,7 @@ func Namespaces(td *tekton.TemplateData) g.Node {
 	)
 }
 
-func Search(td *tekton.TemplateData) g.Node {
+func Search(td *model.TemplateData) g.Node {
 	return Div(
 		ID("search"), Class("container-fluid mt-3"),
 		StyleAttr("display: flex;"),
@@ -151,9 +150,9 @@ func Search(td *tekton.TemplateData) g.Node {
 	)
 }
 
-func ExplorerList(td *tekton.TemplateData) g.Node {
+func ExplorerList(td *model.TemplateData) g.Node {
 	return Table(
-		Class("table table-zebra"),
+		Class("table table-zebra table-pin-rows"),
 		THead(Tr(
 			htmx.Get(td.URLFor("items", td.Resource)),
 			htmx.Target("#items"),
@@ -191,8 +190,8 @@ func iconFor(status string) g.Node {
 	return g.Text("")
 }
 
-func ExplorerListItems(sr handlers.SearchResults) []g.Node {
-	return g.Map(sr.Items, func(it handlers.SearchItem) g.Node {
+func ExplorerListItems(sr model.SearchResults) []g.Node {
+	return g.Map(sr.Items, func(it model.SearchItem) g.Node {
 		return Tr(
 			g.If(
 				it.NextPage != "",
@@ -234,7 +233,7 @@ func ExplorerListItems(sr handlers.SearchResults) []g.Node {
 	})
 }
 
-func Explorer(td *tekton.TemplateData) g.Node {
+func Explorer(td *model.TemplateData) g.Node {
 	return Div(
 		Class("h-screen"), StyleAttr("display: flex; flex-direction: column;"),
 		NavBar(td),
