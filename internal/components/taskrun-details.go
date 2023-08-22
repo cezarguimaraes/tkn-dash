@@ -16,6 +16,7 @@ type stepDetail struct {
 	idx     int
 	Name    string
 	Content g.Node
+	Active  bool
 }
 
 func detailsHTMX(td *tekton.TemplateData, route string) g.Node {
@@ -56,6 +57,7 @@ func TaskRunDetails(td *tekton.TemplateData) g.Node {
 	for idx, sd := range stepDetails {
 		sd.idx = idx
 	}
+	stepDetails[0].Active = true
 
 	return Div(
 		Table(
@@ -73,6 +75,29 @@ func TaskRunDetails(td *tekton.TemplateData) g.Node {
 			),
 		),
 		Div(
+			StyleAttr("flex-grow: 1;"),
+			H3(g.Text(td.Step)),
+			Div(
+				Class("tabs tabs-boxed"),
+				ID("step-details-tabs"),
+				g.Group(g.Map(stepDetails, func(sd *stepDetail) g.Node {
+					route := strings.ToLower(sd.Name)
+					return A(
+						c.Classes{
+							"tab":        true,
+							"tab-active": sd.Active,
+						},
+						htmx.Get(td.URLFor(route, td.Namespace, td.TaskRun.GetName(), td.Step)),
+						htmx.Target("#step-details-content"),
+						g.Text(sd.Name),
+					)
+				})),
+			),
+			Div(
+				ID("step-details-content"),
+			),
+		),
+		/*Div(
 			StyleAttr("flex-grow: 1;"),
 			H3(g.Text(td.Step)),
 			Ul(
@@ -99,7 +124,7 @@ func TaskRunDetails(td *tekton.TemplateData) g.Node {
 					)
 				})),
 			),
-		),
+		),*/
 	)
 }
 
