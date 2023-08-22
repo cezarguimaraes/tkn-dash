@@ -177,7 +177,7 @@ func main() {
 		},
 		{
 			route:     "/:namespace/:resource/:name/details",
-			name:      "list-w-pipe-details",
+			name:      "details",
 			component: components.TaskRuns,
 		},
 		{
