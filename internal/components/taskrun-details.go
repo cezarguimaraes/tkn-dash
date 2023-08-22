@@ -61,7 +61,7 @@ func TaskRunDetails(td *tekton.TemplateData) g.Node {
 
 	return Div(
 		Table(
-			Class("table table-dark table-striped"),
+			Class("table table-zebra"),
 			THead(Tr(Th(g.Text("Name")), Th(g.Text("Value")))),
 			TBody(
 				g.Map(

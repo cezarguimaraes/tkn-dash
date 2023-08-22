@@ -15,6 +15,17 @@ type renders[T any] func(T) g.Node
 
 func taskRun(td *tekton.TemplateData) renders[*pipelinev1beta1.TaskRun] {
 	return func(tr *pipelinev1beta1.TaskRun) g.Node {
+		return Li(
+			Details(
+				g.Attr("open"),
+				Summary(
+					g.Text(tr.Spec.TaskRef.Name),
+				),
+				Ul(
+					g.Group(g.Map(tr.Status.Steps, step(td, tr))),
+				),
+			),
+		)
 		return Div(
 			Class("accordion-item"),
 			H2(
@@ -59,6 +70,25 @@ func step(
 			ss.Terminated.ExitCode == 0
 		active := td.TaskRun.GetName() == tr.GetName() &&
 			td.Step == ss.Name
+		return Li(
+			A(
+				c.Classes{
+					"active": active,
+				},
+				htmx.Get(
+					td.URLFor(
+						"details-w-step",
+						tr.GetNamespace(),
+						tr.GetName(),
+						ss.Name,
+					),
+				),
+				htmx.Target("#taskrun-details"),
+				htmx.PushURL(stepURL(td, tr.GetName(), ss.Name)),
+				htmx.Swap("innerHTML"),
+				g.Text(ss.Name),
+			),
+		)
 		return A(
 			Href("#"),
 			c.Classes{
@@ -95,6 +125,23 @@ func (ww *wrap) Render(w io.Writer) error {
 }
 
 func TaskRuns(td *tekton.TemplateData) g.Node {
+	return Div(
+		ID("details"), StyleAttr("display: flex;"),
+
+		Div(
+			ID("tasks"), Class("ms-3 mt-3"),
+			StyleAttr("flex-shrink: 0; min-width: 300px;"),
+			Ul(
+				Class("menu bg-base-200 rounded-box"),
+				g.Group(g.Map(td.TaskRuns, taskRun(td))),
+			),
+		),
+		Div(
+			ID("taskrun-details"),
+			Class("ms-3 mt-3"),
+			StyleAttr("flex-grow: 5; height: 100%; display: flex; flex-direction: column;"),
+		),
+	)
 	return Div(
 		ID("details"), StyleAttr("display: flex;"),
 		Div(

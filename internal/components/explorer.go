@@ -14,6 +14,41 @@ import (
 const navBarContent = "navbar-content"
 
 func NavBar(td *tekton.TemplateData) g.Node {
+	return Div(
+		Class("navbar bg-base-100"),
+		Div(
+			Class("navbar-start"),
+			A(
+				Href("https://github.com/cezarguimaraes/tkn-dash"),
+				Target("_blank"),
+				Class("btn btn-ghost normal-case text-xl"),
+				g.Text("tkn-dash"),
+			),
+		),
+		Div(
+			Class("navbar-center flex"),
+			Ul(
+				Class("menu menu-horizontal grap-1"),
+				g.Group(g.Map([]string{"PipelineRuns", "TaskRuns"}, func(r string) g.Node {
+					active := strings.ToLower(r) == td.Resource
+					return Li(
+						Class("px-2"),
+						A(
+							c.Classes{
+								"active": active,
+							},
+							Href(td.URLFor(
+								"list",
+								td.Namespace,
+								strings.ToLower(r),
+							)),
+							g.Text(r),
+						),
+					)
+				})),
+			),
+		),
+	)
 	return Nav(
 		Class("navbar navbar-expand-lg bg-body-tertiary"),
 		Div(
@@ -61,21 +96,24 @@ func NavBar(td *tekton.TemplateData) g.Node {
 
 func Namespaces(td *tekton.TemplateData) g.Node {
 	return Div(
-		Class("ms-3 form-floating"),
+		Class("mx-2 form-floating"),
 		StyleAttr("flex-grow: 1;"),
 		Select(
-			Name("namespace"), ID("namespace"), Class("form-select"),
+			Name("namespace"), ID("namespace"), Class("select select-primary w-full"),
 			StyleAttr("flex-grow: 1;"),
 			AutoComplete("off"),
 			htmx.Get(td.URLFor("items", td.Resource)),
 			htmx.Target("#items"),
 			htmx.Swap("innerHTML"),
 			htmx.Include("#search"),
+			Option(
+				Disabled(),
+				g.Text("Namespace"),
+			),
 			g.Group(g.Map(td.Namespaces, func(ns string) g.Node {
 				return Option(g.If(ns == td.Namespace, Selected()), g.Text(ns))
 			})),
 		),
-		Label(For("namespace"), g.Text("Namespace")),
 	)
 }
 
@@ -84,10 +122,11 @@ func Search(td *tekton.TemplateData) g.Node {
 		ID("search"), Class("container-fluid mt-3"),
 		StyleAttr("display: flex;"),
 		Div(
+			Class("mx-2"),
 			StyleAttr("flex-grow: 5;"),
 			Input(
 				Name("search"), ID("search-text"),
-				Class("form-control form-control-lg"),
+				Class("input input-bordered input-primary w-full"),
 				Type("search"),
 				Placeholder("Write a label selector (e.g: \"label=foo\" or \"label1 in (foo, bar), label2 != baz\")"),
 				htmx.Get(td.URLFor("items", td.Resource)),
@@ -97,10 +136,11 @@ func Search(td *tekton.TemplateData) g.Node {
 				htmx.Include("#search"),
 			),
 			Div(
-				Class("w-100 pt-1 pe-2 text-end"),
-				StyleAttr("color: var(--bs-info-text-emphasis)"),
+				Class("pt-1 pe-2 text-xs text-end"),
 				g.Text("For more information, check "),
 				A(
+					Class("link link-info"),
+					Target("_blank"),
 					Href("https://pkg.go.dev/k8s.io/apimachinery/pkg/labels#Parse"),
 					g.Text("https://pkg.go.dev/k8s.io/apimachinery/pkg/labels#Parse"),
 				),
@@ -113,7 +153,7 @@ func Search(td *tekton.TemplateData) g.Node {
 
 func ExplorerList(td *tekton.TemplateData) g.Node {
 	return Table(
-		Class("table table-dark table-striped"),
+		Class("table table-zebra"),
 		THead(Tr(
 			htmx.Get(td.URLFor("items", td.Resource)),
 			htmx.Target("#items"),
@@ -165,7 +205,12 @@ func ExplorerListItems(sr handlers.SearchResults) []g.Node {
 			Td(
 				A(
 					Href("#"),
-					Class("link-info link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"),
+					c.Classes{
+						"badge gap-2 badge-outline": true,
+						"badge-success":             it.Status == "Succeeded",
+						"badge-warning":             it.Status == "Running",
+						"badge-error":               it.Status == "Failed",
+					},
 					htmx.Get(sr.URLFor(
 						"details",
 						it.Namespace,
@@ -191,7 +236,7 @@ func ExplorerListItems(sr handlers.SearchResults) []g.Node {
 
 func Explorer(td *tekton.TemplateData) g.Node {
 	return Div(
-		Class("vh-100"), StyleAttr("display: flex; flex-direction: column;"),
+		Class("h-screen"), StyleAttr("display: flex; flex-direction: column;"),
 		NavBar(td),
 		Search(td),
 		Div(

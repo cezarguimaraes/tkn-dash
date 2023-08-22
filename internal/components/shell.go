@@ -51,6 +51,7 @@ func Shell(content ...handlers.TektonComponent) handlers.TektonComponent {
 				g.Map(content, func(tc handlers.TektonComponent) g.Node {
 					return tc(td)
 				}),
+				DataAttr("theme", "night"),
 				/*DataAttr("bs-theme", "dark"),
 				Script(
 					Src("/_static/bootstrap.bundle.min.js"),
