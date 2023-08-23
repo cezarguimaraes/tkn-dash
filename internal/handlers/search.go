@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
 	"github.com/cezarguimaraes/tkn-dash/pkg/cache"
 	"github.com/labstack/echo/v4"
@@ -14,21 +15,7 @@ import (
 	"knative.dev/pkg/apis"
 )
 
-type SearchItem struct {
-	Namespace string
-	Name      string
-	Age       string
-	Status    string
-	NextPage  string
-}
-
-type SearchResults struct {
-	Resource string
-	Items    []SearchItem
-	URLFor   func(string, ...interface{}) string
-}
-
-type renderer func(SearchResults) []gomponents.Node
+type renderer func(model.SearchResults) []gomponents.Node
 
 func Search(r renderer) echo.HandlerFunc {
 	return func(c echo.Context) error {
@@ -73,7 +60,7 @@ func Search(r renderer) echo.HandlerFunc {
 			return err
 		}
 
-		items := make([]SearchItem, 0, len(results))
+		items := make([]model.SearchItem, 0, len(results))
 
 		now := time.Now()
 		for i, r := range results {
@@ -107,7 +94,7 @@ func Search(r renderer) echo.HandlerFunc {
 			}
 
 			obj := r.(metav1.Object)
-			items = append(items, SearchItem{
+			items = append(items, model.SearchItem{
 				Namespace: obj.GetNamespace(),
 				Name:      obj.GetName(),
 				NextPage:  nextPage,
@@ -119,7 +106,7 @@ func Search(r renderer) echo.HandlerFunc {
 
 		}
 
-		sr := SearchResults{
+		sr := model.SearchResults{
 			Resource: resource,
 			Items:    items,
 			URLFor:   c.Echo().Reverse,

@@ -12,6 +12,7 @@ import (
 	"github.com/cezarguimaraes/tkn-dash/internal/components"
 	"github.com/cezarguimaraes/tkn-dash/internal/handlers"
 	"github.com/cezarguimaraes/tkn-dash/internal/loader"
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
 	"github.com/cezarguimaraes/tkn-dash/internal/tools"
 	"github.com/cezarguimaraes/tkn-dash/pkg/cache"
@@ -151,9 +152,13 @@ func main() {
 		)
 	})
 
+	e.GET("/favicon.ico", func(c echo.Context) error {
+		return c.String(http.StatusNotFound, "not found")
+	})
+
 	componentRoutes := []struct {
 		name, route string
-		component   handlers.TektonComponent
+		component   model.TektonComponent
 	}{
 		{
 			route:     "/:namespace/:resource",
@@ -171,8 +176,18 @@ func main() {
 			component: components.Shell(components.Explorer),
 		},
 		{
+			route:     "/:namespace/:resource/:taskRun/step/:step/:tab",
+			name:      "list-w-task-details-tab",
+			component: components.Shell(components.Explorer),
+		},
+		{
 			route:     "/:namespace/:resource/:pipelineRun/taskruns/:taskRun/step/:step",
 			name:      "list-w-pipe-details",
+			component: components.Shell(components.Explorer),
+		},
+		{
+			route:     "/:namespace/:resource/:pipelineRun/taskruns/:taskRun/step/:step/:tab",
+			name:      "list-w-pipe-details-tab",
 			component: components.Shell(components.Explorer),
 		},
 		{
@@ -183,7 +198,7 @@ func main() {
 		{
 			route:     "/:namespace/details/:taskRun/step/:step",
 			name:      "details-w-step",
-			component: components.TaskRunDetails,
+			component: components.TaskRunDetails(true),
 		},
 	}
 
@@ -194,15 +209,15 @@ func main() {
 		).Name = ct.name
 	}
 
-	e.GET("/:namespace/log/:taskRun/step/:step",
+	e.GET("/log/:namespace/:taskRun/step/:step",
 		handlers.StepLog(kubeclientset),
 	).Name = "log"
 
-	e.GET("/:namespace/script/:taskRun/step/:step",
+	e.GET("/script/:namespace/:taskRun/step/:step",
 		handlers.StepScript(*chromaStyle),
 	).Name = "script"
 
-	e.GET("/:namespace/manifest/:taskRun",
+	e.GET("/manifest/:namespace/:taskRun/step/:step",
 		handlers.Manifest(*chromaStyle),
 	).Name = "manifest"
 

@@ -1,15 +1,14 @@
 package components
 
 import (
-	"github.com/cezarguimaraes/tkn-dash/internal/handlers"
-	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	g "github.com/maragudk/gomponents"
 	c "github.com/maragudk/gomponents/components"
 	. "github.com/maragudk/gomponents/html"
 )
 
-func Shell(content ...handlers.TektonComponent) handlers.TektonComponent {
-	return func(td *tekton.TemplateData) g.Node {
+func Shell(content ...model.TektonComponent) model.TektonComponent {
+	return func(td *model.TemplateData) g.Node {
 		return c.HTML5(c.HTML5Props{
 			Title: "tkn-dash",
 			Head: []g.Node{
@@ -21,36 +20,19 @@ func Shell(content ...handlers.TektonComponent) handlers.TektonComponent {
 					),
 				),
 				Link(
-					Href("/_static/bootstrap.min.css"),
+					Href("/_static/daisyui.css"),
 					Rel("stylesheet"),
-					g.Attr(
-						"integrity",
-						"sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9",
-					),
+					Type("text/css"),
 				),
-				StyleEl(
-					g.Text(`
-                    .list-group-item.active {
-                        /* BS default blue is not at all readable with
-                           red and green text */ 
-                        background-color: var(--bs-secondary-bg-subtle) !important;
-                        border-color: var(--bs-secondary-bg-subtle) !important;
-                    } 
-                `),
+				Script(
+					Src("/_static/tailwindcss.js"),
 				),
 			},
 			Body: append(
-				g.Map(content, func(tc handlers.TektonComponent) g.Node {
+				g.Map(content, func(tc model.TektonComponent) g.Node {
 					return tc(td)
 				}),
-				DataAttr("bs-theme", "dark"),
-				Script(
-					Src("/_static/bootstrap.bundle.min.js"),
-					g.Attr(
-						"integrity",
-						"sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm",
-					),
-				),
+				DataAttr("theme", "night"),
 			),
 		})
 	}

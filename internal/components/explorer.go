@@ -3,8 +3,7 @@ package components
 import (
 	"strings"
 
-	"github.com/cezarguimaraes/tkn-dash/internal/handlers"
-	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
+	"github.com/cezarguimaraes/tkn-dash/internal/model"
 	g "github.com/maragudk/gomponents"
 	htmx "github.com/maragudk/gomponents-htmx"
 	c "github.com/maragudk/gomponents/components"
@@ -13,81 +12,78 @@ import (
 
 const navBarContent = "navbar-content"
 
-func NavBar(td *tekton.TemplateData) g.Node {
-	return Nav(
-		Class("navbar navbar-expand-lg bg-body-tertiary"),
+func NavBar(td *model.TemplateData) g.Node {
+	return Div(
+		Class("navbar bg-base-100"),
 		Div(
-			Class("container-fluid"),
-			A(Class("navbar-brand"), Href("#"), g.Text("tkn-dash")),
-			Button(
-				Class("navbar-toggler"),
-				Type("button"),
-				DataAttr("bs-toggle", "collapse"),
-				DataAttr("bs-target", "#"+navBarContent),
-				Aria("controls", navBarContent),
-				Aria("expanded", "false"),
-				Aria("label", "Toggle navigation"),
-				Span(Class("navbar-toggler-icon")),
+			Class("navbar-start"),
+			A(
+				Href("https://github.com/cezarguimaraes/tkn-dash"),
+				Target("_blank"),
+				Class("btn btn-ghost normal-case text-xl"),
+				g.Text("tkn-dash"),
 			),
-			Div(Class("collapse navbar-collapse"), ID(navBarContent),
-				Ul(
-					Class("navbar-nav me-auto mb-2 mb-lg-0"),
-					g.Group(g.Map(
-						[]string{"PipelineRuns", "TaskRuns"},
-						func(res string) g.Node {
-							active := strings.ToLower(res) == td.Resource
-							return Li(
-								Class("nav-item"),
-								A(
-									c.Classes{
-										"nav-link": true,
-										"active":   active,
-									},
-									Href(td.URLFor(
-										"list",
-										td.Namespace,
-										strings.ToLower(res),
-									)),
-									g.Text(res),
-								),
-							)
-						},
-					)),
-				),
+		),
+		Div(
+			Class("navbar-center flex"),
+			Ul(
+				Class("menu menu-horizontal grap-1"),
+				g.Group(g.Map([]string{"PipelineRuns", "TaskRuns"}, func(r string) g.Node {
+					active := strings.ToLower(r) == td.Resource
+					return Li(
+						Class("px-2"),
+						A(
+							c.Classes{
+								"active": active,
+							},
+							Href(td.URLFor(
+								"list",
+								td.Namespace,
+								strings.ToLower(r),
+							)),
+							g.Text(r),
+						),
+					)
+				})),
 			),
 		),
 	)
 }
 
-func Namespaces(td *tekton.TemplateData) g.Node {
+func Namespaces(td *model.TemplateData) g.Node {
 	return Div(
-		Class("ms-3 form-floating"),
+		Class("mx-2 form-floating"),
 		StyleAttr("flex-grow: 1;"),
 		Select(
-			Name("namespace"), ID("namespace"), Class("form-select"),
+			Name("namespace"), ID("namespace"), Class("select select-primary w-full"),
 			StyleAttr("flex-grow: 1;"),
 			AutoComplete("off"),
 			htmx.Get(td.URLFor("items", td.Resource)),
 			htmx.Target("#items"),
 			htmx.Swap("innerHTML"),
 			htmx.Include("#search"),
+			Option(
+				Disabled(),
+				g.Text("Namespace"),
+			),
 			g.Group(g.Map(td.Namespaces, func(ns string) g.Node {
 				return Option(g.If(ns == td.Namespace, Selected()), g.Text(ns))
 			})),
 		),
-		Label(For("namespace"), g.Text("Namespace")),
 	)
 }
 
-func Search(td *tekton.TemplateData) g.Node {
+func Search(td *model.TemplateData) g.Node {
 	return Div(
-		ID("search"), Class("container-fluid mt-3"),
+		g.Raw(`<div class="bg-gradient-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90% "></div>`),
+		ID("search"), Class("container-fluid my-3"),
 		StyleAttr("display: flex;"),
 		Div(
+			Class("mx-2"),
 			StyleAttr("flex-grow: 5;"),
 			Input(
 				Name("search"), ID("search-text"),
-				Class("form-control form-control-lg"),
+				Class("input input-bordered input-primary w-full"),
 				Type("search"),
 				Placeholder("Write a label selector (e.g: \"label=foo\" or \"label1 in (foo, bar), label2 != baz\")"),
 				htmx.Get(td.URLFor("items", td.Resource)),
@@ -97,10 +93,11 @@ func Search(td *tekton.TemplateData) g.Node {
 				htmx.Include("#search"),
 			),
 			Div(
-				Class("w-100 pt-1 pe-2 text-end"),
-				StyleAttr("color: var(--bs-info-text-emphasis)"),
+				Class("pt-1 pe-2 text-xs text-end"),
 				g.Text("For more information, check "),
 				A(
+					Class("link link-info"),
+					Target("_blank"),
 					Href("https://pkg.go.dev/k8s.io/apimachinery/pkg/labels#Parse"),
 					g.Text("https://pkg.go.dev/k8s.io/apimachinery/pkg/labels#Parse"),
 				),
@@ -111,9 +108,9 @@ func Search(td *tekton.TemplateData) g.Node {
 	)
 }
 
-func ExplorerList(td *tekton.TemplateData) g.Node {
+func ExplorerList(td *model.TemplateData) g.Node {
 	return Table(
-		Class("table table-dark table-striped"),
+		Class("table table-zebra table-pin-rows"),
 		THead(Tr(
 			htmx.Get(td.URLFor("items", td.Resource)),
 			htmx.Target("#items"),
@@ -131,7 +128,7 @@ func iconFor(status string) g.Node {
 	switch status {
 	case "Failed":
 		return g.Raw(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="text-danger bi bi-x-circle-fill" viewBox="0 0 16 16">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="text-error bi bi-x-circle-fill" viewBox="0 0 16 16">
                 <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
             </svg>
         `)
@@ -151,8 +148,8 @@ func iconFor(status string) g.Node {
 	return g.Text("")
 }
 
-func ExplorerListItems(sr handlers.SearchResults) []g.Node {
-	return g.Map(sr.Items, func(it handlers.SearchItem) g.Node {
+func ExplorerListItems(sr model.SearchResults) []g.Node {
+	return g.Map(sr.Items, func(it model.SearchItem) g.Node {
 		return Tr(
 			g.If(
 				it.NextPage != "",
@@ -165,7 +162,7 @@ func ExplorerListItems(sr handlers.SearchResults) []g.Node {
 			Td(
 				A(
 					Href("#"),
-					Class("link-info link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover"),
+					Class("inline-flex"),
 					htmx.Get(sr.URLFor(
 						"details",
 						it.Namespace,
@@ -180,7 +177,10 @@ func ExplorerListItems(sr handlers.SearchResults) []g.Node {
 						sr.Resource,
 						it.Name,
 					)),
-					iconFor(it.Status),
+					Span(
+						Class("pe-2"),
+						iconFor(it.Status),
+					),
 					g.Text(it.Name),
 				),
 			),
@@ -189,9 +189,9 @@ func ExplorerListItems(sr handlers.SearchResults) []g.Node {
 	})
 }
 
-func Explorer(td *tekton.TemplateData) g.Node {
+func Explorer(td *model.TemplateData) g.Node {
 	return Div(
-		Class("vh-100"), StyleAttr("display: flex; flex-direction: column;"),
+		Class("h-screen"), StyleAttr("display: flex; flex-direction: column;"),
 		NavBar(td),
 		Search(td),
 		Div(
