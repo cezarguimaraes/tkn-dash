@@ -24,6 +24,8 @@ go install github.com/cezarguimaraes/tkn-dash@latest
 ```
 - Self-contained executables for Linux, Windows and Mac are available on the [releases page](https://github.com/cezarguimaraes/tkn-dash/releases).
 
+> For cluster deployment instructions, read [Kubernetes Deployment](#kubernetes-deployment).
+
 ## Usage
 
 - Start the server on a random port, using local kubernetes credentials and open a browser to it:
@@ -45,3 +47,29 @@ go install github.com/cezarguimaraes/tkn-dash@latest
     kubectl get taskruns -o json > tmp/trs.json
     kubectl get pipelineruns -o json > tmp/prs.json
     ```
+
+## Kubernetes Deployment
+
+> To quickly create a local kubernetes cluster using `minikube`, refer to [Tekton dashboard](https://github.com/tektoncd/dashboard/blob/main/docs/tutorial.md) tutorial.
+
+A release file is made available on every [release](https://github.com/cezarguimaraes/tkn-dash/releases).
+
+- Apply the `release.yaml` file:
+  ```bash
+  VERSION=<latest tag without v>
+  kubectl apply -f https://github.com/cezarguimaraes/tkn-dash/releases/download/v${VERSION}/release.yaml
+  ```
+- Note the release does not include a `Service` resource. To create a `ClusterIP` service, run:
+  ```bash
+  kubectl expose deployment -n tkn-dash tkn-dash --type=ClusterIP
+  ```
+
+For local access, `port-forwarding` is possible:
+```bash
+kubectl port-forward -n tkn-dash deployment/tkn-dash 8000
+```
+Then access http://localhost:8000/ in your browser.
+
+
+
+
