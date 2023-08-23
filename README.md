@@ -6,10 +6,14 @@
 
 `tkn-dash` is a barebones, lightweight and **fast** alternative to [Tekton Dashboard](https://github.com/tektoncd/dashboard).
 
+![image](https://i.imgur.com/iZyZOg2.png)
+
+
 Some of its highlights are:
-- no deployment required: can be used as a command line tool, spinning up a local dashboard using the user's own cluster credentials.
-- can be used without cluster access, if provided with a snapshot of `Tekton` resources.
-- fast: while the official tekton dashboard _list_ pages can take minutes to become interactive in clusters with thousands of tekton resources, `tkn-dash` is immediatelly responsive as the full list of resources is never sent to the client.
+- no deployment required: can be used as a command line tool.
+- syntax highlighting of step's `script` fields, powered by [alecthomas/chroma](https://github.com/alecthomas/chroma#supported-languages)
+- can be used without cluster access by parsing JSON exports of `Tekton` resources.
+- _blazingly fast™_
 - powered by [HTMX](https://htmx.org/).
 
 ## Installing
