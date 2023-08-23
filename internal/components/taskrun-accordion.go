@@ -13,47 +13,21 @@ import (
 
 type renders[T any] func(T) g.Node
 
-func taskRun(td *model.TemplateData) renders[*pipelinev1beta1.TaskRun] {
+func taskRun(td *model.TemplateData, outOfBand bool) renders[*pipelinev1beta1.TaskRun] {
 	return func(tr *pipelinev1beta1.TaskRun) g.Node {
+		if tr == nil {
+			return g.Text("this should not happen")
+		}
 		return Li(
+			ID(tr.GetName()),
+			g.If(outOfBand, htmx.SwapOOB("true")),
 			Details(
 				g.Attr("open"),
 				Summary(
+					Class("font-semibold"),
 					g.Text(tr.Spec.TaskRef.Name),
 				),
 				Ul(
-					g.Group(g.Map(tr.Status.Steps, step(td, tr))),
-				),
-			),
-		)
-		return Div(
-			Class("accordion-item"),
-			H2(
-				Class("accordion-header"),
-				Button(
-					c.Classes{
-						"accordion-button": true,
-						"collapsed":        td.TaskRun.GetName() != tr.GetName(),
-					},
-					Type("button"),
-					DataAttr("bs-toggle", "collapse"),
-					DataAttr("bs-target", "#"+tr.GetName()),
-					Span(
-						Class("me-2"),
-						g.Text(tr.Spec.TaskRef.Name),
-					),
-				),
-			),
-			Div(
-				ID(tr.GetName()),
-				c.Classes{
-					"accordion-collapse": true,
-					"collapse":           true,
-					"show":               td.TaskRun.GetName() == tr.GetName(),
-				},
-				DataAttr("bs-parent", "#accordion"),
-				Ul(
-					Class("list-group-flush list-group"),
 					g.Group(g.Map(tr.Status.Steps, step(td, tr))),
 				),
 			),
@@ -70,48 +44,36 @@ func step(
 			ss.Terminated.ExitCode == 0
 		active := td.TaskRun.GetName() == tr.GetName() &&
 			td.Step == ss.Name
+		var indicator g.Node
+		if success {
+			indicator = iconFor("Succeeded")
+		} else {
+			indicator = iconFor("Failed")
+		}
+		detailsURL := td.URLFor(
+			"details-w-step",
+			tr.GetNamespace(),
+			tr.GetName(),
+			ss.Name,
+		)
+		if td.PipelineRun != nil {
+			detailsURL = detailsURL + "?pipelineRun=" + td.PipelineRun.GetName()
+		}
 		return Li(
 			A(
 				c.Classes{
 					"active": active,
+					"my-1":   true,
 				},
-				htmx.Get(
-					td.URLFor(
-						"details-w-step",
-						tr.GetNamespace(),
-						tr.GetName(),
-						ss.Name,
-					),
-				),
+				htmx.Get(detailsURL),
 				htmx.Target("#taskrun-details"),
 				htmx.PushURL(stepURL(td, tr.GetName(), ss.Name)),
 				htmx.Swap("innerHTML"),
+				Span(
+					indicator,
+				),
 				g.Text(ss.Name),
 			),
-		)
-		return A(
-			Href("#"),
-			c.Classes{
-				"list-group-item":        true,
-				"list-group-item-action": true,
-				"text-bold":              true,
-				"text-success":           success,
-				"text-danger":            !success,
-				"active":                 active,
-			},
-			DataAttr("bs-toggle", "list"),
-			htmx.Get(
-				td.URLFor(
-					"details-w-step",
-					tr.GetNamespace(),
-					tr.GetName(),
-					ss.Name,
-				),
-			),
-			htmx.Target("#taskrun-details"),
-			htmx.PushURL(stepURL(td, tr.GetName(), ss.Name)),
-			htmx.Swap("innerHTML"),
-			g.Text(ss.Name),
 		)
 	}
 }
@@ -128,52 +90,46 @@ func TaskRuns(td *model.TemplateData) g.Node {
 	return Div(
 		ID("details"), StyleAttr("display: flex;"),
 
-		Div(
-			ID("tasks"), Class("ms-3 mt-3"),
-			StyleAttr("flex-shrink: 0; min-width: 300px;"),
-			Ul(
-				Class("menu bg-base-200 rounded-box"),
-				g.Group(g.Map(td.TaskRuns, taskRun(td))),
-			),
-		),
-		Div(
-			ID("taskrun-details"),
-			Class("ms-3 mt-3"),
-			StyleAttr("flex-grow: 5; height: 100%; display: flex; flex-direction: column;"),
-		),
+		g.If(td.TaskRun != nil, &wrap{func() g.Node {
+			return RGroup(
+				Div(
+					ID("tasks"), Class("ms-3 mt-3"),
+					StyleAttr("flex-shrink: 0; min-width: 300px;"),
+					Ul(
+						Class("menu bg-base-200 rounded-box"),
+						g.Group(g.Map(td.TaskRuns, taskRun(td, false))),
+					),
+				),
+				Div(
+					ID("taskrun-details"),
+					Class("ms-3 mt-3"),
+					StyleAttr("flex-grow: 5; height: 100%; display: flex; flex-direction: column;"),
+					g.If(td.TaskRun != nil, &wrap{func() g.Node { return TaskRunDetails(false)(td) }}),
+				),
+			)
+		}}),
 	)
-	return Div(
-		ID("details"), StyleAttr("display: flex;"),
-		Div(
-			ID("tasks"), Class("ms-3 mt-3"),
-			StyleAttr("flex-shrink: 0; min-width: 300px;"),
-			Div(
-				Class("accordion"), ID("taskrun-accordion"),
-				g.Group(g.Map(td.TaskRuns, taskRun(td))),
-			),
-		),
-		Div(
-			ID("taskrun-details"),
-			Class("ms-3 mt-3"),
-			StyleAttr("flex-grow: 5; height: 100%; display: flex; flex-direction: column;"),
-			g.If(
-				td.TaskRun != nil && td.Step != "",
-				&wrap{func() g.Node {
-					return Div(
-						htmx.Get(
-							td.URLFor(
-								"details-w-step",
-								td.TaskRun.GetNamespace(),
-								td.TaskRun.GetName(),
-								td.Step,
-							),
-						),
-						htmx.Trigger("load"),
-						htmx.Swap("outerHTML"),
-					)
-				}},
-			),
-		),
+}
+
+func stepTabURL(data *model.TemplateData, taskRun, step, tab string) string {
+	if data.PipelineRun != nil {
+		return data.URLFor(
+			"list-w-pipe-details-tab",
+			data.PipelineRun.GetNamespace(),
+			"pipelineruns",
+			data.PipelineRun.GetName(),
+			taskRun,
+			step,
+			tab,
+		)
+	}
+	return data.URLFor(
+		"list-w-task-details-tab",
+		data.TaskRun.GetNamespace(),
+		"taskruns",
+		taskRun,
+		step,
+		tab,
 	)
 }
 

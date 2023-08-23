@@ -51,6 +51,8 @@ func (c *Context) BindTemplateData(td *model.TemplateData) error {
 			}
 		case "step":
 			td.Step = c.Param(pn)
+		case "tab":
+			td.Tab = c.Param(pn)
 		}
 	}
 
@@ -63,6 +65,10 @@ func (c *Context) BindTemplateData(td *model.TemplateData) error {
 		case "task":
 			td.TaskRun = c.GetTaskRun(td.Namespace, c.QueryParam(pn))
 			td.TaskRuns = []*pipelinev1beta1.TaskRun{td.TaskRun}
+		case "pipelineRun":
+			prName := c.QueryParam(pn)
+			td.PipelineRun = c.GetPipelineRun(td.Namespace, prName)
+			td.TaskRuns = c.GetPipelineTaskRuns(td.Namespace, prName)
 		}
 	}
 

@@ -48,49 +48,6 @@ func NavBar(td *model.TemplateData) g.Node {
 			),
 		),
 	)
-	return Nav(
-		Class("navbar navbar-expand-lg bg-body-tertiary"),
-		Div(
-			Class("container-fluid"),
-			A(Class("navbar-brand"), Href("#"), g.Text("tkn-dash")),
-			Button(
-				Class("navbar-toggler"),
-				Type("button"),
-				DataAttr("bs-toggle", "collapse"),
-				DataAttr("bs-target", "#"+navBarContent),
-				Aria("controls", navBarContent),
-				Aria("expanded", "false"),
-				Aria("label", "Toggle navigation"),
-				Span(Class("navbar-toggler-icon")),
-			),
-			Div(Class("collapse navbar-collapse"), ID(navBarContent),
-				Ul(
-					Class("navbar-nav me-auto mb-2 mb-lg-0"),
-					g.Group(g.Map(
-						[]string{"PipelineRuns", "TaskRuns"},
-						func(res string) g.Node {
-							active := strings.ToLower(res) == td.Resource
-							return Li(
-								Class("nav-item"),
-								A(
-									c.Classes{
-										"nav-link": true,
-										"active":   active,
-									},
-									Href(td.URLFor(
-										"list",
-										td.Namespace,
-										strings.ToLower(res),
-									)),
-									g.Text(res),
-								),
-							)
-						},
-					)),
-				),
-			),
-		),
-	)
 }
 
 func Namespaces(td *model.TemplateData) g.Node {
@@ -118,7 +75,8 @@ func Namespaces(td *model.TemplateData) g.Node {
 
 func Search(td *model.TemplateData) g.Node {
 	return Div(
-		ID("search"), Class("container-fluid mt-3"),
+		g.Raw(`<div class="bg-gradient-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90% "></div>`),
+		ID("search"), Class("container-fluid my-3"),
 		StyleAttr("display: flex;"),
 		Div(
 			Class("mx-2"),
@@ -170,7 +128,7 @@ func iconFor(status string) g.Node {
 	switch status {
 	case "Failed":
 		return g.Raw(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="text-danger bi bi-x-circle-fill" viewBox="0 0 16 16">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="text-error bi bi-x-circle-fill" viewBox="0 0 16 16">
                 <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
             </svg>
         `)
@@ -204,12 +162,7 @@ func ExplorerListItems(sr model.SearchResults) []g.Node {
 			Td(
 				A(
 					Href("#"),
-					c.Classes{
-						"badge gap-2 badge-outline": true,
-						"badge-success":             it.Status == "Succeeded",
-						"badge-warning":             it.Status == "Running",
-						"badge-error":               it.Status == "Failed",
-					},
+					Class("inline-flex"),
 					htmx.Get(sr.URLFor(
 						"details",
 						it.Namespace,
@@ -224,7 +177,10 @@ func ExplorerListItems(sr model.SearchResults) []g.Node {
 						sr.Resource,
 						it.Name,
 					)),
-					iconFor(it.Status),
+					Span(
+						Class("pe-2"),
+						iconFor(it.Status),
+					),
 					g.Text(it.Name),
 				),
 			),

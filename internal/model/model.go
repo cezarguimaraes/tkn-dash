@@ -32,6 +32,8 @@ type TemplateData struct {
 	// Step is the name of the step resolved from the :step url param
 	Step string
 
+	Tab string
+
 	URLFor func(name string, args ...interface{}) string
 }
 

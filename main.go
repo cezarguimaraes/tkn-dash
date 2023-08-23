@@ -172,8 +172,18 @@ func main() {
 			component: components.Shell(components.Explorer),
 		},
 		{
+			route:     "/:namespace/:resource/:taskRun/step/:step/:tab",
+			name:      "list-w-task-details-tab",
+			component: components.Shell(components.Explorer),
+		},
+		{
 			route:     "/:namespace/:resource/:pipelineRun/taskruns/:taskRun/step/:step",
 			name:      "list-w-pipe-details",
+			component: components.Shell(components.Explorer),
+		},
+		{
+			route:     "/:namespace/:resource/:pipelineRun/taskruns/:taskRun/step/:step/:tab",
+			name:      "list-w-pipe-details-tab",
 			component: components.Shell(components.Explorer),
 		},
 		{
@@ -184,7 +194,7 @@ func main() {
 		{
 			route:     "/:namespace/details/:taskRun/step/:step",
 			name:      "details-w-step",
-			component: components.TaskRunDetails,
+			component: components.TaskRunDetails(true),
 		},
 	}
 

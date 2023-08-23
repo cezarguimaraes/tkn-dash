@@ -8,7 +8,7 @@ import (
 	"github.com/cezarguimaraes/tkn-dash/internal/syntax"
 	"github.com/cezarguimaraes/tkn-dash/internal/tekton"
 	"github.com/labstack/echo/v4"
-	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/yaml"
 )
 
 const (
