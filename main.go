@@ -152,6 +152,10 @@ func main() {
 		)
 	})
 
+	e.GET("/favicon.ico", func(c echo.Context) error {
+		return c.String(http.StatusNotFound, "not found")
+	})
+
 	componentRoutes := []struct {
 		name, route string
 		component   model.TektonComponent
